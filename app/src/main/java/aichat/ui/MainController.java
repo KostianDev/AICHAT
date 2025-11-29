@@ -239,17 +239,20 @@ public class MainController {
         
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Result Image");
-        fileChooser.getExtensionFilters().addAll(
-            new FileChooser.ExtensionFilter("PNG Files", "*.png"),
-            new FileChooser.ExtensionFilter("JPEG Files", "*.jpg", "*.jpeg")
+        fileChooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("PNG Image", "*.png")
         );
+        fileChooser.setInitialFileName("result.png");
         
         File file = fileChooser.showSaveDialog(resultStage);
         
         if (file != null) {
             try {
-                String format = file.getName().toLowerCase().endsWith(".png") ? "PNG" : "JPEG";
-                ImageIO.write(resultImage, format, file);
+                String path = file.getAbsolutePath();
+                if (!path.toLowerCase().endsWith(".png")) {
+                    file = new File(path + ".png");
+                }
+                ImageIO.write(resultImage, "PNG", file);
                 statusLabel.setText("Image saved: " + file.getName());
             } catch (IOException e) {
                 showAlert("Save Error", "Failed to save image: " + e.getMessage());
