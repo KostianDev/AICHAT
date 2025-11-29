@@ -55,7 +55,7 @@ public class DbscanClusterer implements ClusteringStrategy {
         }
         
         List<ColorPoint> centroids = calculateCentroids(points, labels, clusterId);
-        return reduceCentroids(centroids, k);
+        return adjustCentroidsToK(centroids, k);
     }
     
     private double calculateAdaptiveEps(List<ColorPoint> points, int k) {
@@ -172,15 +172,14 @@ public class DbscanClusterer implements ClusteringStrategy {
     }
     
     /**
-     * Reduces the number of centroids to k by merging the closest clusters.
+     * Adjusts the number of centroids to exactly k.
+     * Merges closest clusters if too many, splits largest if too few.
      */
-    private List<ColorPoint> reduceCentroids(List<ColorPoint> centroids, int k) {
-        if (centroids.size() <= k) {
-            return centroids;
-        }
-        
+    private List<ColorPoint> adjustCentroidsToK(List<ColorPoint> centroids, int k) {
         List<ColorPoint> result = new ArrayList<>(centroids);
+        Random random = new Random(42);
         
+        // If too many clusters, merge closest ones
         while (result.size() > k) {
             double minDist = Double.MAX_VALUE;
             int mergeI = 0, mergeJ = 1;
@@ -206,6 +205,28 @@ public class DbscanClusterer implements ClusteringStrategy {
             
             result.remove(mergeJ);
             result.set(mergeI, merged);
+        }
+        
+        // If too few clusters, split existing ones by adding variations
+        while (result.size() < k && !result.isEmpty()) {
+            // Find the centroid to split (pick one with most "room" to vary)
+            int splitIndex = result.size() > 1 ? random.nextInt(result.size()) : 0;
+            ColorPoint toSplit = result.get(splitIndex);
+            
+            // Create a variation by shifting color values
+            double offset = 15.0 + random.nextDouble() * 15.0; // 15-30 units offset
+            int component = random.nextInt(3);
+            
+            double newC1 = toSplit.c1() + (component == 0 ? offset : 0);
+            double newC2 = toSplit.c2() + (component == 1 ? offset : 0);
+            double newC3 = toSplit.c3() + (component == 2 ? offset : 0);
+            
+            // Clamp to valid RGB range
+            newC1 = Math.max(0, Math.min(255, newC1));
+            newC2 = Math.max(0, Math.min(255, newC2));
+            newC3 = Math.max(0, Math.min(255, newC3));
+            
+            result.add(new ColorPoint(newC1, newC2, newC3));
         }
         
         return result;

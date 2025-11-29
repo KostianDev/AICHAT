@@ -55,6 +55,9 @@ public class MainController {
     private BufferedImage targetImage;
     private BufferedImage resultImage;
     
+    private ColorPalette sourcePalette;
+    private ColorPalette targetPalette;
+    
     private Stage resultStage;
     
     @FXML
@@ -110,27 +113,30 @@ public class MainController {
         setProcessing(true, "Analyzing images...");
         
         Task<Void> analyzeTask = new Task<>() {
-            private ColorPalette srcPalette;
-            private ColorPalette tgtPalette;
+            private ColorPalette srcPal;
+            private ColorPalette tgtPal;
             
             @Override
             protected Void call() {
                 ImageHarmonyEngine engine = new ImageHarmonyEngine(algorithm, colorModel);
                 
                 if (sourceImage != null) {
-                    srcPalette = engine.analyze(sourceImage, k);
+                    srcPal = engine.analyze(sourceImage, k);
                 }
                 if (targetImage != null) {
-                    tgtPalette = engine.analyze(targetImage, k);
+                    tgtPal = engine.analyze(targetImage, k);
                 }
                 return null;
             }
             
             @Override
             protected void succeeded() {
-                displayPalette(sourcePalettePane, srcPalette);
-                displayPalette(targetPalettePane, tgtPalette);
+                sourcePalette = srcPal;
+                targetPalette = tgtPal;
+                displayPalette(sourcePalettePane, sourcePalette);
+                displayPalette(targetPalettePane, targetPalette);
                 setProcessing(false, "Analysis complete.");
+                updateButtonStates();
             }
             
             @Override
@@ -149,17 +155,26 @@ public class MainController {
             return;
         }
         
+        if (sourcePalette == null || targetPalette == null) {
+            showAlert("No Palettes", "Please analyze both images first to extract palettes.");
+            return;
+        }
+        
         Algorithm algorithm = algorithmCombo.getValue();
         ColorModel colorModel = colorModelCombo.getValue();
-        int k = kSpinner.getValue();
         
         setProcessing(true, "Resynthesizing image...");
+        
+        // Capture palettes for the task
+        final ColorPalette srcPal = sourcePalette;
+        final ColorPalette tgtPal = targetPalette;
         
         Task<BufferedImage> resynthTask = new Task<>() {
             @Override
             protected BufferedImage call() {
                 ImageHarmonyEngine engine = new ImageHarmonyEngine(algorithm, colorModel);
-                return engine.resynthesize(sourceImage, targetImage, k);
+                // Apply source palette colors to target image
+                return engine.resynthesize(targetImage, srcPal, tgtPal);
             }
             
             @Override
@@ -284,9 +299,13 @@ public class MainController {
             
             if (isSource) {
                 sourceImage = image;
+                sourcePalette = null;  // Reset palette when new image loaded
+                sourcePalettePane.getChildren().clear();
                 displayImage(sourceImageView, image);
             } else {
                 targetImage = image;
+                targetPalette = null;  // Reset palette when new image loaded
+                targetPalettePane.getChildren().clear();
                 displayImage(targetImageView, image);
             }
             
@@ -344,9 +363,10 @@ public class MainController {
     private void updateButtonStates() {
         boolean hasSource = sourceImage != null;
         boolean hasTarget = targetImage != null;
+        boolean hasPalettes = sourcePalette != null && targetPalette != null;
         
         analyzeButton.setDisable(!hasSource && !hasTarget);
-        resynthesizeButton.setDisable(!hasSource || !hasTarget);
+        resynthesizeButton.setDisable(!hasSource || !hasTarget || !hasPalettes);
     }
     
     private void showAlert(String title, String content) {

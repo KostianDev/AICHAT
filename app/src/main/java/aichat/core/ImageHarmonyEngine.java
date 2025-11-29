@@ -64,31 +64,59 @@ public class ImageHarmonyEngine {
     }
     
     /**
-     * Resynthesizes the source image using the color palette from target image.
+     * Resynthesizes the target image using colors from source palette.
+     * Each pixel in target is mapped to the closest color in target palette,
+     * then replaced with the corresponding color from source palette.
+     * 
+     * @param targetImage the image to transform
+     * @param sourcePalette the palette to apply (colors from source image)
+     * @param targetPalette the palette extracted from target image
+     * @return transformed image with source colors
      */
-    public BufferedImage resynthesize(BufferedImage sourceImage, BufferedImage targetImage, int k) {
-        ColorPalette targetPalette = analyze(targetImage, k);
-        ColorPalette sourcePalette = analyze(sourceImage, k);
+    public BufferedImage resynthesize(BufferedImage targetImage, 
+                                       ColorPalette sourcePalette, 
+                                       ColorPalette targetPalette) {
+        // Build mapping from target palette colors to source palette colors
+        // Map by sorting both palettes by luminance and matching by index
+        List<ColorPoint> sortedSource = sourcePalette.sortByLuminance().getColors();
+        List<ColorPoint> sortedTarget = targetPalette.sortByLuminance().getColors();
         
-        int width = sourceImage.getWidth();
-        int height = sourceImage.getHeight();
+        int width = targetImage.getWidth();
+        int height = targetImage.getHeight();
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int rgb = sourceImage.getRGB(x, y);
-                ColorPoint sourcePixel = ColorPoint.fromRGB(rgb);
+                int rgb = targetImage.getRGB(x, y);
+                ColorPoint pixel = ColorPoint.fromRGB(rgb);
                 
-                int sourceIndex = sourcePalette.findClosestIndex(sourcePixel);
-                ColorPoint targetColor = targetPalette.getColors().get(
-                    sourceIndex % targetPalette.getColors().size()
-                );
+                // Find closest color in target palette
+                int targetIndex = findClosestIndex(pixel, sortedTarget);
                 
-                result.setRGB(x, y, targetColor.toRGB());
+                // Map to corresponding source color (by luminance order)
+                int sourceIndex = targetIndex % sortedSource.size();
+                ColorPoint newColor = sortedSource.get(sourceIndex);
+                
+                result.setRGB(x, y, newColor.toRGB());
             }
         }
         
         return result;
+    }
+    
+    private int findClosestIndex(ColorPoint pixel, List<ColorPoint> palette) {
+        int closestIndex = 0;
+        double minDist = Double.MAX_VALUE;
+        
+        for (int i = 0; i < palette.size(); i++) {
+            double dist = pixel.distanceTo(palette.get(i));
+            if (dist < minDist) {
+                minDist = dist;
+                closestIndex = i;
+            }
+        }
+        
+        return closestIndex;
     }
     
     private List<ColorPoint> extractPixels(BufferedImage image) {

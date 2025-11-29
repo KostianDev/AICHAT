@@ -40,9 +40,10 @@ public class KMeansClusterer implements ClusteringStrategy {
         
         for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             boolean changed = assignPoints(points, centroids, assignments);
-            List<ColorPoint> newCentroids = updateCentroids(points, assignments, k);
+            List<ColorPoint> newCentroids = updateCentroids(points, assignments, centroids.size(), centroids);
             
             if (hasConverged(centroids, newCentroids) || !changed) {
+                centroids = newCentroids;
                 break;
             }
             
@@ -121,7 +122,8 @@ public class KMeansClusterer implements ClusteringStrategy {
         return nearest;
     }
     
-    private List<ColorPoint> updateCentroids(List<ColorPoint> points, int[] assignments, int k) {
+    private List<ColorPoint> updateCentroids(List<ColorPoint> points, int[] assignments, int k, 
+                                              List<ColorPoint> oldCentroids) {
         List<ColorPoint> newCentroids = new ArrayList<>(k);
         
         for (int cluster = 0; cluster < k; cluster++) {
@@ -141,7 +143,8 @@ public class KMeansClusterer implements ClusteringStrategy {
             if (count > 0) {
                 newCentroids.add(new ColorPoint(sumC1 / count, sumC2 / count, sumC3 / count));
             } else {
-                newCentroids.add(new ColorPoint(0, 0, 0));
+                // Reinitialize empty cluster with a random point
+                newCentroids.add(points.get(random.nextInt(points.size())));
             }
         }
         
@@ -149,6 +152,9 @@ public class KMeansClusterer implements ClusteringStrategy {
     }
     
     private boolean hasConverged(List<ColorPoint> old, List<ColorPoint> current) {
+        if (old.size() != current.size()) {
+            return false;
+        }
         for (int i = 0; i < old.size(); i++) {
             if (old.get(i).distanceTo(current.get(i)) > CONVERGENCE_THRESHOLD) {
                 return false;
