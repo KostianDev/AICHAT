@@ -6,15 +6,16 @@ import aichat.core.ImageHarmonyEngine.ColorModel;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
 
-import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.FlowPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.FileChooser;
@@ -32,7 +33,8 @@ public class MainController {
     
     @FXML private ImageView sourceImageView;
     @FXML private ImageView targetImageView;
-    @FXML private ImageView resultImageView;
+    
+    @FXML private SplitPane mainSplitPane;
     
     @FXML private ComboBox<Algorithm> algorithmCombo;
     @FXML private ComboBox<ColorModel> colorModelCombo;
@@ -42,7 +44,6 @@ public class MainController {
     @FXML private Button loadTargetButton;
     @FXML private Button analyzeButton;
     @FXML private Button resynthesizeButton;
-    @FXML private Button saveResultButton;
     
     @FXML private FlowPane sourcePalettePane;
     @FXML private FlowPane targetPalettePane;
@@ -53,6 +54,8 @@ public class MainController {
     private BufferedImage sourceImage;
     private BufferedImage targetImage;
     private BufferedImage resultImage;
+    
+    private Stage resultStage;
     
     @FXML
     public void initialize() {
@@ -65,6 +68,12 @@ public class MainController {
         SpinnerValueFactory<Integer> kFactory = 
             new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 32, 5);
         kSpinner.setValueFactory(kFactory);
+        
+        // Bind image views to scroll pane size for responsive scaling
+        sourceImageView.fitWidthProperty().bind(
+            mainSplitPane.widthProperty().multiply(0.45));
+        targetImageView.fitWidthProperty().bind(
+            mainSplitPane.widthProperty().multiply(0.45));
         
         updateButtonStates();
         statusLabel.setText("Ready. Load images to begin.");
@@ -156,9 +165,8 @@ public class MainController {
             @Override
             protected void succeeded() {
                 resultImage = getValue();
-                displayImage(resultImageView, resultImage);
-                setProcessing(false, "Resynthesis complete.");
-                updateButtonStates();
+                showResultWindow(resultImage);
+                setProcessing(false, "Resynthesis complete. Result shown in new window.");
             }
             
             @Override
@@ -170,7 +178,47 @@ public class MainController {
         new Thread(resynthTask).start();
     }
     
-    @FXML
+    private void showResultWindow(BufferedImage image) {
+        if (resultStage == null) {
+            resultStage = new Stage();
+            resultStage.setTitle("AICHAT - Result");
+        }
+        
+        Image fxImage = SwingFXUtils.toFXImage(image, null);
+        ImageView imageView = new ImageView(fxImage);
+        imageView.setPreserveRatio(true);
+        imageView.setFitWidth(Math.min(image.getWidth(), 1200));
+        imageView.setFitHeight(Math.min(image.getHeight(), 800));
+        
+        ScrollPane scrollPane = new ScrollPane(imageView);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setStyle("-fx-background-color: #2b2b2b;");
+        
+        Button saveButton = new Button("Save Image");
+        saveButton.setOnAction(e -> handleSaveResult());
+        
+        Button closeButton = new Button("Close");
+        closeButton.setOnAction(e -> resultStage.close());
+        
+        HBox buttonBar = new HBox(10, saveButton, closeButton);
+        buttonBar.setAlignment(Pos.CENTER);
+        buttonBar.setPadding(new Insets(10));
+        buttonBar.setStyle("-fx-background-color: #f0f0f0;");
+        
+        BorderPane root = new BorderPane();
+        root.setCenter(scrollPane);
+        root.setBottom(buttonBar);
+        
+        Scene scene = new Scene(root, 
+            Math.min(image.getWidth() + 40, 1240), 
+            Math.min(image.getHeight() + 80, 880));
+        
+        resultStage.setScene(scene);
+        resultStage.show();
+        resultStage.toFront();
+    }
+    
     private void handleSaveResult() {
         if (resultImage == null) {
             showAlert("No Result", "No result image to save.");
@@ -184,8 +232,7 @@ public class MainController {
             new FileChooser.ExtensionFilter("JPEG Files", "*.jpg", "*.jpeg")
         );
         
-        Stage stage = (Stage) saveResultButton.getScene().getWindow();
-        File file = fileChooser.showSaveDialog(stage);
+        File file = fileChooser.showSaveDialog(resultStage);
         
         if (file != null) {
             try {
@@ -200,6 +247,9 @@ public class MainController {
     
     @FXML
     private void handleExit() {
+        if (resultStage != null) {
+            resultStage.close();
+        }
         Stage stage = (Stage) loadSourceButton.getScene().getWindow();
         stage.close();
     }
@@ -240,7 +290,7 @@ public class MainController {
                 displayImage(targetImageView, image);
             }
             
-            statusLabel.setText("Loaded: " + file.getName());
+            statusLabel.setText("Loaded: " + file.getName() + " (" + image.getWidth() + "x" + image.getHeight() + ")");
             updateButtonStates();
             
         } catch (IOException e) {
@@ -261,16 +311,19 @@ public class MainController {
             VBox colorBox = new VBox(2);
             colorBox.setStyle("-fx-alignment: center;");
             
-            Rectangle rect = new Rectangle(40, 40);
+            Rectangle rect = new Rectangle(45, 45);
             rect.setFill(Color.rgb(
                 clamp((int) color.c1()),
                 clamp((int) color.c2()),
                 clamp((int) color.c3())
             ));
-            rect.setStroke(Color.BLACK);
+            rect.setStroke(Color.GRAY);
+            rect.setStrokeWidth(1);
+            rect.setArcWidth(5);
+            rect.setArcHeight(5);
             
             Label hexLabel = new Label(color.toHexString());
-            hexLabel.setStyle("-fx-font-size: 9px;");
+            hexLabel.setStyle("-fx-font-size: 10px; -fx-font-family: monospace;");
             
             colorBox.getChildren().addAll(rect, hexLabel);
             pane.getChildren().add(colorBox);
@@ -291,11 +344,9 @@ public class MainController {
     private void updateButtonStates() {
         boolean hasSource = sourceImage != null;
         boolean hasTarget = targetImage != null;
-        boolean hasResult = resultImage != null;
         
         analyzeButton.setDisable(!hasSource && !hasTarget);
         resynthesizeButton.setDisable(!hasSource || !hasTarget);
-        saveResultButton.setDisable(!hasResult);
     }
     
     private void showAlert(String title, String content) {
