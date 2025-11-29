@@ -1,38 +1,31 @@
 /**
- * DBSCAN Optimized Implementation for Color Clustering
+ * AICHAT Native Library - DBSCAN Clustering
  * 
- * Based on "DBSCAN Revisited, Revisited" (Schubert et al., 2017)
- * 
- * Key optimizations:
- * 1. Grid-based spatial index for O(1) average neighbor lookup
- * 2. Proper eps selection heuristics (k-distance graph)
- * 3. Efficient seed set using visited flags instead of contains()
- * 4. SIMD-accelerated distance calculations
- * 
- * For 3D color space with small eps, this achieves near-linear performance.
+ * Optimized implementation with grid-based spatial index.
+ * Based on "DBSCAN Revisited, Revisited" (Schubert et al., 2017).
  */
 
-#include "aichat_native.h"
+#include "../include/dbscan.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <float.h>
 
 // ============================================================================
-// Grid-based Spatial Index for 3D Color Space
+// Grid-based Spatial Index
 // ============================================================================
 
 typedef struct {
-    int* indices;       // Point indices in this cell
-    int count;          // Number of points
-    int capacity;       // Allocated capacity
+    int* indices;
+    int count;
+    int capacity;
 } GridCell;
 
 typedef struct {
     GridCell* cells;
-    int grid_size;      // Number of cells per dimension
-    float cell_size;    // Size of each cell (should be >= eps)
-    float min_c1, min_c2, min_c3;  // Bounding box min
+    int grid_size;
+    float cell_size;
+    float min_c1, min_c2, min_c3;
     int total_cells;
 } SpatialGrid;
 
@@ -66,29 +59,24 @@ static SpatialGrid* grid_create(const ColorPoint3f* points, int n, float eps) {
         if (points[i].c3 > max_c3) max_c3 = points[i].c3;
     }
     
-    // Cell size should be at least eps for efficient range queries
-    // Using eps ensures we only need to check 3x3x3=27 neighboring cells
     grid->cell_size = eps;
-    grid->min_c1 = min_c1 - eps;  // Small padding
+    grid->min_c1 = min_c1 - eps;
     grid->min_c2 = min_c2 - eps;
     grid->min_c3 = min_c3 - eps;
     
     float range_c1 = (max_c1 - min_c1) + 2 * eps;
     float range_c2 = (max_c2 - min_c2) + 2 * eps;
     float range_c3 = (max_c3 - min_c3) + 2 * eps;
-    
     float max_range = fmaxf(fmaxf(range_c1, range_c2), range_c3);
     
-    // Limit grid size to prevent memory explosion
-    // For color space (0-255), with eps=10, we get ~26 cells per dimension
     grid->grid_size = (int)ceilf(max_range / eps);
     if (grid->grid_size < 1) grid->grid_size = 1;
-    if (grid->grid_size > 256) grid->grid_size = 256;  // Cap for memory
+    if (grid->grid_size > 256) grid->grid_size = 256;
     
     grid->total_cells = grid->grid_size * grid->grid_size * grid->grid_size;
     grid->cells = (GridCell*)calloc(grid->total_cells, sizeof(GridCell));
     
-    // Count points per cell (first pass)
+    // Count points per cell
     int* counts = (int*)calloc(grid->total_cells, sizeof(int));
     for (int i = 0; i < n; i++) {
         int x = grid_coord(points[i].c1, grid->min_c1, grid->cell_size, grid->grid_size);
@@ -106,7 +94,7 @@ static SpatialGrid* grid_create(const ColorPoint3f* points, int n, float eps) {
         }
     }
     
-    // Insert points (second pass)
+    // Insert points
     for (int i = 0; i < n; i++) {
         int x = grid_coord(points[i].c1, grid->min_c1, grid->cell_size, grid->grid_size);
         int y = grid_coord(points[i].c2, grid->min_c2, grid->cell_size, grid->grid_size);
@@ -130,11 +118,6 @@ static void grid_destroy(SpatialGrid* grid) {
     free(grid);
 }
 
-/**
- * Range query using spatial grid.
- * Only checks 3x3x3 = 27 neighboring cells.
- * Returns count of neighbors (including the point itself).
- */
 static int grid_range_query(
     const SpatialGrid* grid,
     const ColorPoint3f* points,
@@ -151,7 +134,7 @@ static int grid_range_query(
     
     int count = 0;
     
-    // Check 3x3x3 neighborhood of cells
+    // Check 3x3x3 neighborhood
     for (int dx = -1; dx <= 1 && count < max_neighbors; dx++) {
         int nx = cx + dx;
         if (nx < 0 || nx >= grid->grid_size) continue;
@@ -186,18 +169,10 @@ static int grid_range_query(
 }
 
 // ============================================================================
-// Epsilon Selection Heuristics
+// Epsilon Calculation
 // ============================================================================
 
-/**
- * Calculates adaptive epsilon using k-distance graph heuristic.
- * Based on the original DBSCAN paper (Ester et al., 1996).
- * 
- * For 3D color data, we use k = minPts - 1 (typically 5-9).
- * The "elbow" in the k-distance graph is approximated by taking
- * a percentile (around 90th) of the k-th nearest neighbor distances.
- */
-AICHAT_EXPORT float dbscan_calculate_eps_optimized(
+AICHAT_EXPORT float dbscan_calculate_eps(
     const ColorPoint3f* points,
     int n,
     int min_pts,
@@ -205,29 +180,21 @@ AICHAT_EXPORT float dbscan_calculate_eps_optimized(
     uint64_t seed
 ) {
     if (n <= min_pts) {
-        // Default for very small datasets
         return 15.0f;
     }
     
-    // For color clustering, we want relatively small eps
-    // Typical good values are 10-50 for RGB (0-255 range)
-    
-    // Use k = minPts - 1 for k-distance
     int k = min_pts > 1 ? min_pts - 1 : 1;
     if (k > n - 1) k = n - 1;
     
-    // Sample points for efficiency
     int actual_samples = sample_size < n ? sample_size : n;
     
-    // Allocate arrays
     float* k_distances = (float*)malloc(actual_samples * sizeof(float));
     float* point_distances = (float*)malloc(n * sizeof(float));
     
-    // Simple LCG for random sampling
+    // LCG for sampling
     uint64_t rng_state = seed ? seed : 12345;
     
     for (int s = 0; s < actual_samples; s++) {
-        // Random point selection
         rng_state = rng_state * 6364136223846793005ULL + 1442695040888963407ULL;
         int idx = (int)((rng_state >> 33) % (uint64_t)n);
         
@@ -242,7 +209,6 @@ AICHAT_EXPORT float dbscan_calculate_eps_optimized(
         }
         
         // Partial sort to find k-th smallest
-        // Using simple selection for small k
         for (int i = 0; i <= k; i++) {
             int min_idx = i;
             for (int j = i + 1; j < n; j++) {
@@ -271,17 +237,14 @@ AICHAT_EXPORT float dbscan_calculate_eps_optimized(
         }
     }
     
-    // Find "elbow" point - where the curve starts to flatten
-    // Heuristic: use the point where slope changes significantly
-    // Or simply take ~75-90th percentile
-    
+    // Elbow at ~85th percentile
     int elbow_idx = (int)(actual_samples * 0.85);
     float eps = k_distances[elbow_idx];
     
     free(k_distances);
     free(point_distances);
     
-    // Clamp to reasonable range for color clustering
+    // Clamp to reasonable range
     if (eps < 5.0f) eps = 5.0f;
     if (eps > 100.0f) eps = 100.0f;
     
@@ -289,23 +252,10 @@ AICHAT_EXPORT float dbscan_calculate_eps_optimized(
 }
 
 // ============================================================================
-// Optimized DBSCAN Algorithm
+// DBSCAN Clustering
 // ============================================================================
 
-#define DBSCAN_UNDEFINED -2
-#define DBSCAN_NOISE_LABEL -1
-
-/**
- * Optimized DBSCAN using grid-based spatial index.
- * 
- * For N points with small eps (typical for color clustering):
- * - Grid construction: O(N)
- * - Range queries: O(1) average (only check 27 cells)
- * - Total: O(N) average case for well-distributed data
- * 
- * The original O(N²) complexity is reduced by the spatial index.
- */
-AICHAT_EXPORT int dbscan_cluster_optimized(
+AICHAT_EXPORT int dbscan_cluster(
     const ColorPoint3f* points,
     int n,
     float eps,
@@ -316,37 +266,35 @@ AICHAT_EXPORT int dbscan_cluster_optimized(
     
     float eps_sq = eps * eps;
     
-    // Initialize all labels as undefined
+    // Initialize labels
     for (int i = 0; i < n; i++) {
-        labels[i] = DBSCAN_UNDEFINED;
+        labels[i] = DBSCAN_UNCLASSIFIED;
     }
     
     // Build spatial grid
     SpatialGrid* grid = grid_create(points, n, eps);
     if (!grid) return 0;
     
-    // Allocate neighbor buffer and seed queue
+    // Allocate buffers
     int* neighbors = (int*)malloc(n * sizeof(int));
     int* seed_queue = (int*)malloc(n * sizeof(int));
-    int* in_queue = (int*)calloc(n, sizeof(int));  // Track if point is in queue
+    int* in_queue = (int*)calloc(n, sizeof(int));
     
     int cluster_id = 0;
     
     for (int i = 0; i < n; i++) {
-        if (labels[i] != DBSCAN_UNDEFINED) continue;  // Already processed
+        if (labels[i] != DBSCAN_UNCLASSIFIED) continue;
         
-        // Find neighbors using grid
         int neighbor_count = grid_range_query(grid, points, i, eps_sq, neighbors, n);
         
         if (neighbor_count < min_pts) {
-            labels[i] = DBSCAN_NOISE_LABEL;
+            labels[i] = DBSCAN_NOISE;
             continue;
         }
         
         // Start new cluster
         labels[i] = cluster_id;
         
-        // Initialize seed queue with neighbors (excluding i)
         int queue_start = 0;
         int queue_end = 0;
         
@@ -358,30 +306,25 @@ AICHAT_EXPORT int dbscan_cluster_optimized(
             }
         }
         
-        // Process seed queue
+        // Expand cluster
         while (queue_start < queue_end) {
             int q = seed_queue[queue_start++];
             
-            // Change noise to border point
-            if (labels[q] == DBSCAN_NOISE_LABEL) {
+            if (labels[q] == DBSCAN_NOISE) {
                 labels[q] = cluster_id;
             }
             
-            // Skip if already assigned to a cluster
-            if (labels[q] != DBSCAN_UNDEFINED) continue;
+            if (labels[q] != DBSCAN_UNCLASSIFIED) continue;
             
-            // Assign to current cluster
             labels[q] = cluster_id;
             
-            // Find neighbors of q
             int q_neighbor_count = grid_range_query(grid, points, q, eps_sq, neighbors, n);
             
-            // If q is a core point, add its neighbors to queue
             if (q_neighbor_count >= min_pts) {
                 for (int j = 0; j < q_neighbor_count; j++) {
                     int neighbor = neighbors[j];
                     if (!in_queue[neighbor] && 
-                        (labels[neighbor] == DBSCAN_UNDEFINED || labels[neighbor] == DBSCAN_NOISE_LABEL)) {
+                        (labels[neighbor] == DBSCAN_UNCLASSIFIED || labels[neighbor] == DBSCAN_NOISE)) {
                         seed_queue[queue_end++] = neighbor;
                         in_queue[neighbor] = 1;
                     }
@@ -389,7 +332,7 @@ AICHAT_EXPORT int dbscan_cluster_optimized(
             }
         }
         
-        // Clear in_queue for next cluster
+        // Clear in_queue
         for (int j = 0; j < queue_end; j++) {
             in_queue[seed_queue[j]] = 0;
         }
@@ -405,11 +348,11 @@ AICHAT_EXPORT int dbscan_cluster_optimized(
     return cluster_id;
 }
 
-/**
- * Calculate cluster centroids from DBSCAN labels.
- * Properly handles noise points (label == -1).
- */
-AICHAT_EXPORT void dbscan_calculate_centroids_optimized(
+// ============================================================================
+// Centroid Calculation
+// ============================================================================
+
+AICHAT_EXPORT void dbscan_calculate_centroids(
     const ColorPoint3f* points,
     int n,
     const int* labels,
@@ -418,7 +361,6 @@ AICHAT_EXPORT void dbscan_calculate_centroids_optimized(
 ) {
     if (num_clusters == 0) return;
     
-    // Use double for accumulation to prevent precision loss
     double* sums = (double*)calloc(num_clusters * 3, sizeof(double));
     int* counts = (int*)calloc(num_clusters, sizeof(int));
     
@@ -439,7 +381,6 @@ AICHAT_EXPORT void dbscan_calculate_centroids_optimized(
             centroids[c].c2 = (float)(sums[c * 3 + 1] * inv);
             centroids[c].c3 = (float)(sums[c * 3 + 2] * inv);
         } else {
-            // Empty cluster (shouldn't happen with valid DBSCAN output)
             centroids[c].c1 = 127.5f;
             centroids[c].c2 = 127.5f;
             centroids[c].c3 = 127.5f;
@@ -448,40 +389,4 @@ AICHAT_EXPORT void dbscan_calculate_centroids_optimized(
     
     free(sums);
     free(counts);
-}
-
-// ============================================================================
-// Wrapper Functions (Replace old implementations)
-// ============================================================================
-
-// These replace the old implementations in aichat_native.c
-
-AICHAT_EXPORT float dbscan_calculate_eps_v2(
-    const ColorPoint3f* points,
-    int n,
-    int min_pts,
-    int sample_size,
-    uint64_t seed
-) {
-    return dbscan_calculate_eps_optimized(points, n, min_pts, sample_size, seed);
-}
-
-AICHAT_EXPORT int dbscan_cluster_v2(
-    const ColorPoint3f* points,
-    int n,
-    float eps,
-    int min_pts,
-    int* labels
-) {
-    return dbscan_cluster_optimized(points, n, eps, min_pts, labels);
-}
-
-AICHAT_EXPORT void dbscan_calculate_centroids_v2(
-    const ColorPoint3f* points,
-    int n,
-    const int* labels,
-    int num_clusters,
-    ColorPoint3f* centroids
-) {
-    dbscan_calculate_centroids_optimized(points, n, labels, num_clusters, centroids);
 }
