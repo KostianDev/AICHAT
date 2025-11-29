@@ -1,0 +1,37 @@
+.root {
+    -fx-font-family: "Segoe UI", "Ubuntu", sans-serif;
+    -fx-font-size: 13px;
+}
+
+.tool-bar {
+    -fx-background-color: #e8e8e8;
+    -fx-padding: 8px;
+}
+
+.button {
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 12px;
+}
+
+.button:hover {
+    -fx-opacity: 0.85;
+}
+
+.scroll-pane {
+    -fx-background-color: #fafafa;
+    -fx-border-color: #cccccc;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: #dddddd;
+}
+
+.progress-bar {
+    -fx-accent: #2196F3;
+}
+
+.flow-pane {
+    -fx-background-color: #f9f9f9;
+    -fx-padding: 5px;
+    -fx-border-color: #e0e0e0;
+}

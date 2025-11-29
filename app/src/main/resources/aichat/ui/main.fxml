@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml/1" 
+            fx:controller="aichat.ui.MainController"
+            prefWidth="1200" prefHeight="800">
+    
+    <top>
+        <VBox>
+            <MenuBar>
+                <menus>
+                    <Menu text="File">
+                        <items>
+                            <MenuItem text="Load Source Image" onAction="#handleLoadSource"/>
+                            <MenuItem text="Load Target Image" onAction="#handleLoadTarget"/>
+                            <SeparatorMenuItem/>
+                            <MenuItem text="Save Result" onAction="#handleSaveResult"/>
+                            <SeparatorMenuItem/>
+                            <MenuItem text="Exit" onAction="#handleExit"/>
+                        </items>
+                    </Menu>
+                    <Menu text="Help">
+                        <items>
+                            <MenuItem text="About" onAction="#handleAbout"/>
+                        </items>
+                    </Menu>
+                </menus>
+            </MenuBar>
+            
+            <ToolBar>
+                <Button fx:id="loadSourceButton" text="Load Source" onAction="#handleLoadSource"/>
+                <Button fx:id="loadTargetButton" text="Load Target" onAction="#handleLoadTarget"/>
+                <Separator/>
+                
+                <Label text="Algorithm:"/>
+                <ComboBox fx:id="algorithmCombo" prefWidth="100"/>
+                
+                <Label text="Color Model:"/>
+                <ComboBox fx:id="colorModelCombo" prefWidth="100"/>
+                
+                <Label text="Colors (k):"/>
+                <Spinner fx:id="kSpinner" prefWidth="70"/>
+                
+                <Separator/>
+                <Button fx:id="analyzeButton" text="Analyze" onAction="#handleAnalyze"/>
+                <Button fx:id="resynthesizeButton" text="Resynthesize" onAction="#handleResynthesize"/>
+                <Separator/>
+                <Button fx:id="saveResultButton" text="Save Result" onAction="#handleSaveResult"/>
+            </ToolBar>
+        </VBox>
+    </top>
+    
+    <center>
+        <SplitPane dividerPositions="0.33, 0.66" orientation="HORIZONTAL">
+            <VBox spacing="10" style="-fx-padding: 10;">
+                <Label text="Source Image" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+                <ScrollPane fitToWidth="true" fitToHeight="true" VBox.vgrow="ALWAYS">
+                    <ImageView fx:id="sourceImageView" preserveRatio="true" fitWidth="350"/>
+                </ScrollPane>
+                <Label text="Source Palette:"/>
+                <FlowPane fx:id="sourcePalettePane" hgap="5" vgap="5" prefHeight="80"/>
+            </VBox>
+            
+            <VBox spacing="10" style="-fx-padding: 10;">
+                <Label text="Target Image" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+                <ScrollPane fitToWidth="true" fitToHeight="true" VBox.vgrow="ALWAYS">
+                    <ImageView fx:id="targetImageView" preserveRatio="true" fitWidth="350"/>
+                </ScrollPane>
+                <Label text="Target Palette:"/>
+                <FlowPane fx:id="targetPalettePane" hgap="5" vgap="5" prefHeight="80"/>
+            </VBox>
+            
+            <VBox spacing="10" style="-fx-padding: 10;">
+                <Label text="Result Image" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
+                <ScrollPane fitToWidth="true" fitToHeight="true" VBox.vgrow="ALWAYS">
+                    <ImageView fx:id="resultImageView" preserveRatio="true" fitWidth="350"/>
+                </ScrollPane>
+                <Label text="Resynthesized using target palette"/>
+            </VBox>
+        </SplitPane>
+    </center>
+    
+    <bottom>
+        <HBox spacing="10" style="-fx-padding: 10; -fx-background-color: #f0f0f0;">
+            <ProgressBar fx:id="progressBar" prefWidth="200"/>
+            <Label fx:id="statusLabel" text="Ready"/>
+        </HBox>
+    </bottom>
+</BorderPane>
