@@ -6,6 +6,7 @@ import aichat.algorithm.DbscanClusterer;
 import aichat.color.ColorSpaceConverter;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
+import aichat.native_.NativeAccelerator;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -16,6 +17,9 @@ import java.util.Random;
 /**
  * Main orchestrator for image analysis and resynthesis.
  * Uses Strategy Pattern for clustering algorithm selection.
+ * Includes native acceleration via Panama FFI when available.
+ * 
+ * Uses deterministic seeding for reproducible results.
  */
 public class ImageHarmonyEngine {
     
@@ -29,20 +33,29 @@ public class ImageHarmonyEngine {
     
     private static final int MAX_PIXELS_KMEANS = 50000;
     private static final int MAX_PIXELS_DBSCAN = 5000;
+    private static final long DEFAULT_SEED = 42L;
     
     private final Algorithm algorithm;
     private final ColorModel colorModel;
     private final ClusteringStrategy clusteringStrategy;
+    private final NativeAccelerator nativeAccelerator;
+    private final long seed;
     
     public ImageHarmonyEngine(Algorithm algorithm, ColorModel colorModel) {
-        this.algorithm = algorithm;
-        this.colorModel = colorModel;
-        this.clusteringStrategy = createStrategy(algorithm);
+        this(algorithm, colorModel, DEFAULT_SEED);
     }
     
-    private ClusteringStrategy createStrategy(Algorithm algorithm) {
+    public ImageHarmonyEngine(Algorithm algorithm, ColorModel colorModel, long seed) {
+        this.algorithm = algorithm;
+        this.colorModel = colorModel;
+        this.seed = seed;
+        this.clusteringStrategy = createStrategy(algorithm, seed);
+        this.nativeAccelerator = NativeAccelerator.getInstance();
+    }
+    
+    private ClusteringStrategy createStrategy(Algorithm algorithm, long seed) {
         return switch (algorithm) {
-            case KMEANS -> new KMeansClusterer();
+            case KMEANS -> new KMeansClusterer(seed);
             case DBSCAN -> new DbscanClusterer();
         };
     }
@@ -51,10 +64,19 @@ public class ImageHarmonyEngine {
      * Analyzes an image and extracts the dominant color palette.
      */
     public ColorPalette analyze(BufferedImage image, int k) {
-        List<ColorPoint> pixels = extractPixels(image);
-        
         int maxPixels = (algorithm == Algorithm.DBSCAN) ? MAX_PIXELS_DBSCAN : MAX_PIXELS_KMEANS;
-        List<ColorPoint> sampledPixels = samplePixels(pixels, maxPixels);
+        
+        List<ColorPoint> pixels = extractPixels(image);
+        List<ColorPoint> sampledPixels;
+        
+        if (nativeAccelerator.isAvailable()) {
+            sampledPixels = nativeAccelerator.samplePixels(pixels, maxPixels, seed);
+            if (sampledPixels == null) {
+                sampledPixels = samplePixels(pixels, maxPixels);
+            }
+        } else {
+            sampledPixels = samplePixels(pixels, maxPixels);
+        }
         
         List<ColorPoint> workingPixels = convertColorSpace(sampledPixels, true);
         List<ColorPoint> centroids = clusteringStrategy.cluster(workingPixels, k);
@@ -65,19 +87,40 @@ public class ImageHarmonyEngine {
     
     /**
      * Resynthesizes the target image using colors from source palette.
-     * Each pixel in target is mapped to the closest color in target palette,
-     * then replaced with the corresponding color from source palette.
-     * 
-     * @param targetImage the image to transform
-     * @param sourcePalette the palette to apply (colors from source image)
-     * @param targetPalette the palette extracted from target image
-     * @return transformed image with source colors
+     * Uses native acceleration when available.
      */
     public BufferedImage resynthesize(BufferedImage targetImage, 
                                        ColorPalette sourcePalette, 
                                        ColorPalette targetPalette) {
-        // Build mapping from target palette colors to source palette colors
-        // Map by sorting both palettes by luminance and matching by index
+        int width = targetImage.getWidth();
+        int height = targetImage.getHeight();
+        
+        if (nativeAccelerator.isAvailable()) {
+            int[] pixels = new int[width * height];
+            targetImage.getRGB(0, 0, width, height, pixels, 0, width);
+            
+            int[] result = nativeAccelerator.resynthesizeImage(
+                pixels, width, height,
+                targetPalette.sortByLuminance(), 
+                sourcePalette.sortByLuminance()
+            );
+            
+            if (result != null) {
+                BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                output.setRGB(0, 0, width, height, result, 0, width);
+                return output;
+            }
+        }
+        
+        return resynthesizeJava(targetImage, sourcePalette, targetPalette);
+    }
+    
+    /**
+     * Java fallback for resynthesis.
+     */
+    private BufferedImage resynthesizeJava(BufferedImage targetImage,
+                                            ColorPalette sourcePalette,
+                                            ColorPalette targetPalette) {
         List<ColorPoint> sortedSource = sourcePalette.sortByLuminance().getColors();
         List<ColorPoint> sortedTarget = targetPalette.sortByLuminance().getColors();
         
@@ -90,10 +133,7 @@ public class ImageHarmonyEngine {
                 int rgb = targetImage.getRGB(x, y);
                 ColorPoint pixel = ColorPoint.fromRGB(rgb);
                 
-                // Find closest color in target palette
                 int targetIndex = findClosestIndex(pixel, sortedTarget);
-                
-                // Map to corresponding source color (by luminance order)
                 int sourceIndex = targetIndex % sortedSource.size();
                 ColorPoint newColor = sortedSource.get(sourceIndex);
                 
@@ -140,7 +180,7 @@ public class ImageHarmonyEngine {
         }
         
         List<ColorPoint> sampled = new ArrayList<>(pixels);
-        Collections.shuffle(sampled, new Random(42));
+        Collections.shuffle(sampled, new Random(seed));
         return sampled.subList(0, maxSize);
     }
     
@@ -149,15 +189,12 @@ public class ImageHarmonyEngine {
             return points;
         }
         
-        List<ColorPoint> converted = new ArrayList<>(points.size());
-        for (ColorPoint point : points) {
-            if (toLab) {
-                converted.add(ColorSpaceConverter.rgbToLab(point));
-            } else {
-                converted.add(ColorSpaceConverter.labToRgb(point));
-            }
+        // Use batch conversion (native-accelerated if available)
+        if (toLab) {
+            return ColorSpaceConverter.rgbToLabBatch(points);
+        } else {
+            return ColorSpaceConverter.labToRgbBatch(points);
         }
-        return converted;
     }
     
     public Algorithm getAlgorithm() {

@@ -6,3 +6,4 @@ build
 
 .vscode/
 app/.jqwik-database
+app/src/main/resources/native/

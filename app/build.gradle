@@ -1,6 +1,6 @@
 /*
  * AICHAT - Advanced Image Color Harmony Analysis and Transformation
- * Build configuration
+ * Build configuration with Panama FFI native acceleration support
  */
 
 plugins {
@@ -48,7 +48,30 @@ dependencies {
 
 application {
     mainClass = 'aichat.App'
-    applicationDefaultJvmArgs = ['--enable-native-access=javafx.graphics']
+    // Enable native access for both JavaFX and Panama FFI
+    applicationDefaultJvmArgs = [
+        '--enable-native-access=javafx.graphics,ALL-UNNAMED',
+        '-Djava.library.path=' + projectDir.absolutePath + '/src/main/resources/native/linux:' + 
+                                 projectDir.parentFile.absolutePath + '/native/build'
+    ]
+}
+
+// Task to build native library before running
+tasks.register('buildNative', Exec) {
+    workingDir "${project.rootDir}/native"
+    commandLine 'make', 'all'
+    
+    // Don't fail if native build fails - Java fallback will be used
+    ignoreExitValue = true
+    
+    doFirst {
+        println "Building native library..."
+    }
+}
+
+// Make run task depend on native build
+tasks.named('run') {
+    dependsOn 'buildNative'
 }
 
 tasks.named('test') {
@@ -58,6 +81,9 @@ tasks.named('test') {
     include '**/*Test.class'
     include '**/*Tests.class'
     include '**/*Properties.class'
+    
+    // Enable native access for tests
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
 }
 
 // Pitest mutation testing configuration

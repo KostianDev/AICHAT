@@ -1,11 +1,17 @@
 package aichat.color;
 
 import aichat.model.ColorPoint;
+import aichat.native_.NativeAccelerator;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Utility class for converting between RGB and CIELAB color spaces.
  * CIELAB is perceptually uniform, meaning Euclidean distance in CIELAB space
  * approximates human perception of color difference.
+ * 
+ * Supports native acceleration via Panama FFI for batch conversions.
  */
 public final class ColorSpaceConverter {
     
@@ -19,10 +25,62 @@ public final class ColorSpaceConverter {
     private static final double KAPPA = 903.3;
     private static final double DELTA = 6.0 / 29.0;
     
+    private static final NativeAccelerator nativeAccelerator = NativeAccelerator.getInstance();
+    
     private ColorSpaceConverter() {
         // Utility class - no instantiation
     }
     
+    /**
+     * Converts a batch of RGB colors to CIELAB.
+     * Uses native acceleration when available.
+     */
+    public static List<ColorPoint> rgbToLabBatch(List<ColorPoint> rgbColors) {
+        if (rgbColors == null || rgbColors.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Try native batch conversion
+        if (nativeAccelerator.isAvailable()) {
+            List<ColorPoint> nativeResult = nativeAccelerator.rgbToLabBatch(rgbColors);
+            if (nativeResult != null) {
+                return nativeResult;
+            }
+        }
+        
+        // Fallback to Java
+        List<ColorPoint> result = new ArrayList<>(rgbColors.size());
+        for (ColorPoint rgb : rgbColors) {
+            result.add(rgbToLab(rgb));
+        }
+        return result;
+    }
+    
+    /**
+     * Converts a batch of CIELAB colors to RGB.
+     * Uses native acceleration when available.
+     */
+    public static List<ColorPoint> labToRgbBatch(List<ColorPoint> labColors) {
+        if (labColors == null || labColors.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Try native batch conversion
+        if (nativeAccelerator.isAvailable()) {
+            List<ColorPoint> nativeResult = nativeAccelerator.labToRgbBatch(labColors);
+            if (nativeResult != null) {
+                return nativeResult;
+            }
+        }
+        
+        // Fallback to Java
+        List<ColorPoint> result = new ArrayList<>(labColors.size());
+        for (ColorPoint lab : labColors) {
+            result.add(labToRgb(lab));
+        }
+        return result;
+    }
+
     /**
      * Converts an RGB color to CIELAB color space.
      */
