@@ -69,11 +69,16 @@ AICHAT_EXPORT void resynthesize_image(
         };
         
         int closest = find_nearest_centroid(&point, target_palette, palette_size);
-        const ColorPoint3f* new_color = &source_palette[closest];
+        const ColorPoint3f* target_center = &target_palette[closest];
+        const ColorPoint3f* source_center = &source_palette[closest];
         
-        int r = (int)fminf(255.0f, fmaxf(0.0f, new_color->c1 + 0.5f));
-        int g = (int)fminf(255.0f, fmaxf(0.0f, new_color->c2 + 0.5f));
-        int b = (int)fminf(255.0f, fmaxf(0.0f, new_color->c3 + 0.5f));
+        float dc1 = point.c1 - target_center->c1;
+        float dc2 = point.c2 - target_center->c2;
+        float dc3 = point.c3 - target_center->c3;
+        
+        int r = (int)fminf(255.0f, fmaxf(0.0f, source_center->c1 + dc1 + 0.5f));
+        int g = (int)fminf(255.0f, fmaxf(0.0f, source_center->c2 + dc2 + 0.5f));
+        int b = (int)fminf(255.0f, fmaxf(0.0f, source_center->c3 + dc3 + 0.5f));
         
         output_pixels[i] = (uint32_t)((r << 16) | (g << 8) | b);
     }

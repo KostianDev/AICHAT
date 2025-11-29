@@ -78,6 +78,17 @@ public class ImageHarmonyEngine {
     public BufferedImage resynthesize(BufferedImage targetImage, 
                                        ColorPalette sourcePalette, 
                                        ColorPalette targetPalette) {
+        int[] mapping = targetPalette.computeMappingTo(sourcePalette);
+        
+        List<ColorPoint> targetColors = targetPalette.getColors();
+        List<ColorPoint> sourceColors = sourcePalette.getColors();
+        
+        ColorPalette mappedSource = new ColorPalette(
+            java.util.stream.IntStream.range(0, targetColors.size())
+                .mapToObj(i -> sourceColors.get(mapping[i]))
+                .toList()
+        );
+        
         int width = targetImage.getWidth();
         int height = targetImage.getHeight();
         
@@ -87,8 +98,8 @@ public class ImageHarmonyEngine {
             
             int[] result = nativeAccelerator.resynthesizeImage(
                 pixels, width, height,
-                targetPalette.sortByLuminance(), 
-                sourcePalette.sortByLuminance()
+                targetPalette,
+                mappedSource
             );
             
             if (result != null) {
@@ -98,14 +109,14 @@ public class ImageHarmonyEngine {
             }
         }
         
-        return resynthesizeJava(targetImage, sourcePalette, targetPalette);
+        return resynthesizeJava(targetImage, mappedSource, targetPalette);
     }
     
     private BufferedImage resynthesizeJava(BufferedImage targetImage,
-                                            ColorPalette sourcePalette,
+                                            ColorPalette mappedSource,
                                             ColorPalette targetPalette) {
-        List<ColorPoint> sortedSource = sourcePalette.sortByLuminance().getColors();
-        List<ColorPoint> sortedTarget = targetPalette.sortByLuminance().getColors();
+        List<ColorPoint> sourceColors = mappedSource.getColors();
+        List<ColorPoint> targetColors = targetPalette.getColors();
         
         int width = targetImage.getWidth();
         int height = targetImage.getHeight();
@@ -116,15 +127,29 @@ public class ImageHarmonyEngine {
                 int rgb = targetImage.getRGB(x, y);
                 ColorPoint pixel = ColorPoint.fromRGB(rgb);
                 
-                int targetIndex = findClosestIndex(pixel, sortedTarget);
-                int sourceIndex = targetIndex % sortedSource.size();
-                ColorPoint newColor = sortedSource.get(sourceIndex);
+                int targetIndex = findClosestIndex(pixel, targetColors);
+                ColorPoint targetCenter = targetColors.get(targetIndex);
+                ColorPoint sourceCenter = sourceColors.get(targetIndex);
+                
+                double dc1 = pixel.c1() - targetCenter.c1();
+                double dc2 = pixel.c2() - targetCenter.c2();
+                double dc3 = pixel.c3() - targetCenter.c3();
+                
+                ColorPoint newColor = new ColorPoint(
+                    clamp(sourceCenter.c1() + dc1, 0, 255),
+                    clamp(sourceCenter.c2() + dc2, 0, 255),
+                    clamp(sourceCenter.c3() + dc3, 0, 255)
+                );
                 
                 result.setRGB(x, y, newColor.toRGB());
             }
         }
         
         return result;
+    }
+    
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
     
     private int findClosestIndex(ColorPoint pixel, List<ColorPoint> palette) {
