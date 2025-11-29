@@ -1,9 +1,3 @@
-/**
- * AICHAT Native Library - Common Definitions
- * 
- * Shared types, macros, and platform detection.
- */
-
 #ifndef AICHAT_COMMON_H
 #define AICHAT_COMMON_H
 
@@ -14,10 +8,6 @@
 extern "C" {
 #endif
 
-// ============================================================================
-// Platform & Compiler Detection
-// ============================================================================
-
 #ifdef _WIN32
     #define AICHAT_EXPORT __declspec(dllexport)
 #else
@@ -27,10 +17,6 @@ extern "C" {
 #define LIKELY(x)   __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define RESTRICT    __restrict__
-
-// ============================================================================
-// SIMD Detection
-// ============================================================================
 
 #if defined(__SSE__) || defined(__SSE2__)
     #define HAS_SSE 1
@@ -44,25 +30,13 @@ extern "C" {
     #define HAS_AVX 0
 #endif
 
-// ============================================================================
-// Data Types
-// ============================================================================
-
-/**
- * 3D color point in any color space (RGB, LAB, etc.).
- * Using float for SIMD alignment and faster operations.
- */
 typedef struct {
     float c1;  // R or L
     float c2;  // G or a
-    float c3;  // B or b
+    float c3;
 } ColorPoint3f;
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-// CIELAB reference white (D65)
+// CIELAB D65 reference white
 #define REF_X 95.047f
 #define REF_Y 100.000f
 #define REF_Z 108.883f
@@ -72,22 +46,10 @@ typedef struct {
 #define LAB_KAPPA   903.3f
 #define LAB_DELTA   (6.0f / 29.0f)
 
-// DBSCAN labels
 #define DBSCAN_NOISE        -1
 #define DBSCAN_UNCLASSIFIED -2
 
-// ============================================================================
-// API Functions
-// ============================================================================
-
-/**
- * Returns library version string.
- */
 AICHAT_EXPORT const char* aichat_native_version(void);
-
-/**
- * Returns 1 if SIMD (SSE/AVX) is available, 0 otherwise.
- */
 AICHAT_EXPORT int aichat_has_simd(void);
 
 #ifdef __cplusplus

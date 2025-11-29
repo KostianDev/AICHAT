@@ -26,9 +26,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Main controller for the AICHAT JavaFX application.
- */
 public class MainController {
     
     @FXML private ImageView sourceImageView;

@@ -5,13 +5,6 @@ import aichat.native_.NativeAccelerator;
 
 import java.util.*;
 
-/**
- * K-Means clustering algorithm implementation with native acceleration.
- * Uses SIMD-optimized C code via Panama FFI when available.
- * Falls back to pure Java implementation if native library is not loaded.
- * 
- * Uses deterministic seeding for reproducible results.
- */
 public class KMeansClusterer implements ClusteringStrategy {
     
     private static final int MAX_ITERATIONS = 100;
@@ -58,9 +51,6 @@ public class KMeansClusterer implements ClusteringStrategy {
         return clusterJava(points, k);
     }
     
-    /**
-     * Pure Java K-Means implementation (fallback).
-     */
     private List<ColorPoint> clusterJava(List<ColorPoint> points, int k) {
         List<ColorPoint> centroids = initializeCentroids(points, k);
         int[] assignments = new int[points.size()];
@@ -80,9 +70,6 @@ public class KMeansClusterer implements ClusteringStrategy {
         return centroids;
     }
     
-    /**
-     * K-means++ initialization for better initial centroid selection.
-     */
     private List<ColorPoint> initializeCentroids(List<ColorPoint> points, int k) {
         List<ColorPoint> centroids = new ArrayList<>(k);
         

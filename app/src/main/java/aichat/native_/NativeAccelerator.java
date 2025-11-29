@@ -7,9 +7,6 @@ import java.lang.foreign.Arena;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * High-level wrapper for native acceleration functions.
- */
 public final class NativeAccelerator {
     
     private static final NativeAccelerator INSTANCE = new NativeAccelerator();

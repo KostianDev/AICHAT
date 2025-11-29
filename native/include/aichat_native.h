@@ -1,12 +1,3 @@
-/**
- * AICHAT Native Library - Main Header
- * 
- * High-performance color clustering and image processing.
- * Designed for use with Java Panama FFI.
- * 
- * This header includes all sub-modules for convenience.
- */
-
 #ifndef AICHAT_NATIVE_H
 #define AICHAT_NATIVE_H
 

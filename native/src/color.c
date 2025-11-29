@@ -1,15 +1,5 @@
-/**
- * AICHAT Native Library - Color Space Conversion
- * 
- * RGB <-> CIELAB with OpenMP parallelization.
- */
-
 #include "../include/color.h"
 #include <math.h>
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 static inline float srgb_to_linear(float c) {
     c = c / 255.0f;
@@ -28,10 +18,6 @@ static inline float lab_f(float t) {
 static inline float lab_f_inv(float t) {
     return (t > LAB_DELTA) ? t * t * t : (116.0f * t - 16.0f) / LAB_KAPPA;
 }
-
-// ============================================================================
-// Single Point Conversion
-// ============================================================================
 
 static void rgb_to_lab_single(const ColorPoint3f* rgb, ColorPoint3f* lab) {
     // RGB to linear
@@ -78,10 +64,6 @@ static void lab_to_rgb_single(const ColorPoint3f* lab, ColorPoint3f* rgb) {
     rgb->c2 = fminf(255.0f, fmaxf(0.0f, linear_to_srgb(g)));
     rgb->c3 = fminf(255.0f, fmaxf(0.0f, linear_to_srgb(b)));
 }
-
-// ============================================================================
-// Batch Conversion
-// ============================================================================
 
 AICHAT_EXPORT void rgb_to_lab_batch(
     const ColorPoint3f* rgb,

@@ -4,10 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Represents an extracted color palette from an image.
- * Contains the dominant colors identified by clustering algorithms.
- */
 public class ColorPalette {
     
     private final List<ColorPoint> colors;
@@ -16,30 +12,18 @@ public class ColorPalette {
         this.colors = new ArrayList<>(colors);
     }
     
-    /**
-     * Returns an unmodifiable view of the palette colors.
-     */
     public List<ColorPoint> getColors() {
         return Collections.unmodifiableList(colors);
     }
     
-    /**
-     * Returns the number of colors in the palette.
-     */
     public int size() {
         return colors.size();
     }
     
-    /**
-     * Returns the color at the specified index.
-     */
     public ColorPoint getColor(int index) {
         return colors.get(index);
     }
     
-    /**
-     * Finds the closest color in the palette to the given color.
-     */
     public ColorPoint findClosest(ColorPoint target) {
         ColorPoint closest = null;
         double minDistance = Double.MAX_VALUE;
@@ -55,9 +39,6 @@ public class ColorPalette {
         return closest;
     }
     
-    /**
-     * Returns the index of the closest color in the palette.
-     */
     public int findClosestIndex(ColorPoint target) {
         int closestIndex = 0;
         double minDistance = Double.MAX_VALUE;
@@ -73,9 +54,6 @@ public class ColorPalette {
         return closestIndex;
     }
     
-    /**
-     * Returns all colors as hex strings.
-     */
     public List<String> toHexStrings() {
         List<String> hexColors = new ArrayList<>(colors.size());
         for (ColorPoint color : colors) {
@@ -84,9 +62,6 @@ public class ColorPalette {
         return hexColors;
     }
     
-    /**
-     * Sorts the palette by luminance (from darkest to lightest).
-     */
     public ColorPalette sortByLuminance() {
         List<ColorPoint> sorted = new ArrayList<>(colors);
         sorted.sort((a, b) -> {

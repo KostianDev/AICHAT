@@ -1,19 +1,9 @@
-/**
- * AICHAT Native Library - Image Processing
- * 
- * Pixel extraction, sampling, and resynthesis.
- */
-
 #include "../include/image.h"
 #include "../include/distance.h"
 #include "../include/random.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-// ============================================================================
-// Pixel Extraction
-// ============================================================================
 
 AICHAT_EXPORT void extract_pixels(
     const uint32_t* image_pixels,
@@ -28,10 +18,6 @@ AICHAT_EXPORT void extract_pixels(
         output[i].c3 = (float)(pixel & 0xFF);          // B
     }
 }
-
-// ============================================================================
-// Reservoir Sampling
-// ============================================================================
 
 AICHAT_EXPORT int sample_pixels(
     const ColorPoint3f* input,
@@ -61,10 +47,6 @@ AICHAT_EXPORT int sample_pixels(
     
     return sample_size;
 }
-
-// ============================================================================
-// Image Resynthesis
-// ============================================================================
 
 AICHAT_EXPORT void resynthesize_image(
     const uint32_t* image_pixels,

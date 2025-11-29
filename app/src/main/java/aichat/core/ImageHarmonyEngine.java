@@ -14,13 +14,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Main orchestrator for image analysis and resynthesis.
- * Uses Strategy Pattern for clustering algorithm selection.
- * Includes native acceleration via Panama FFI when available.
- * 
- * Uses deterministic seeding for reproducible results.
- */
 public class ImageHarmonyEngine {
     
     public enum Algorithm {
@@ -60,9 +53,6 @@ public class ImageHarmonyEngine {
         };
     }
     
-    /**
-     * Analyzes an image and extracts the dominant color palette.
-     */
     public ColorPalette analyze(BufferedImage image, int k) {
         int maxPixels = (algorithm == Algorithm.DBSCAN) ? MAX_PIXELS_DBSCAN : MAX_PIXELS_KMEANS;
         
@@ -85,10 +75,6 @@ public class ImageHarmonyEngine {
         return new ColorPalette(resultColors);
     }
     
-    /**
-     * Resynthesizes the target image using colors from source palette.
-     * Uses native acceleration when available.
-     */
     public BufferedImage resynthesize(BufferedImage targetImage, 
                                        ColorPalette sourcePalette, 
                                        ColorPalette targetPalette) {
@@ -115,9 +101,6 @@ public class ImageHarmonyEngine {
         return resynthesizeJava(targetImage, sourcePalette, targetPalette);
     }
     
-    /**
-     * Java fallback for resynthesis.
-     */
     private BufferedImage resynthesizeJava(BufferedImage targetImage,
                                             ColorPalette sourcePalette,
                                             ColorPalette targetPalette) {

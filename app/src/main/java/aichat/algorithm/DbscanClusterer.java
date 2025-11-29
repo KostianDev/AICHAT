@@ -5,26 +5,10 @@ import aichat.native_.NativeAccelerator;
 
 import java.util.*;
 
-/**
- * Optimized DBSCAN clustering implementation for color data.
- * 
- * Based on "DBSCAN Revisited, Revisited" (Schubert et al., 2017).
- * 
- * Key optimizations:
- * 1. Grid-based spatial index for O(1) average neighbor lookup
- * 2. Proper eps selection using k-distance graph heuristic
- * 3. Efficient seed queue using BitSet for visited tracking
- * 4. Native acceleration when available
- * 
- * For 3D color space with appropriate eps (10-50), achieves near-linear performance.
- */
 public class DbscanClusterer implements ClusteringStrategy {
     
     private static final int NOISE = -1;
     private static final int UNCLASSIFIED = -2;
-    
-    // Default parameters based on research recommendations
-    // For 3D data: minPts = 2*dim = 6, but 4-10 works well for color clustering
     private static final int DEFAULT_MIN_PTS = 6;
     
     private double eps;

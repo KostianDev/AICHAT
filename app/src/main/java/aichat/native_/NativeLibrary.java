@@ -5,9 +5,6 @@ import java.lang.invoke.MethodHandle;
 import java.nio.file.Path;
 import java.util.Optional;
 
-/**
- * Panama FFI bindings for the AICHAT native library.
- */
 public final class NativeLibrary {
     
     private static final NativeLibrary INSTANCE = new NativeLibrary();

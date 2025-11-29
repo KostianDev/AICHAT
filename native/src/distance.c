@@ -1,9 +1,3 @@
-/**
- * AICHAT Native Library - Distance Functions
- * 
- * SIMD-optimized distance calculations.
- */
-
 #include "../include/distance.h"
 #include <math.h>
 #include <float.h>
@@ -12,10 +6,6 @@
 #if HAS_SSE
     #include <emmintrin.h>
 #endif
-
-// ============================================================================
-// Scalar Distance Functions
-// ============================================================================
 
 AICHAT_EXPORT float distance_squared(const ColorPoint3f* a, const ColorPoint3f* b) {
     float d1 = a->c1 - b->c1;
@@ -47,14 +37,7 @@ int find_nearest_centroid(
     return nearest;
 }
 
-// ============================================================================
-// SSE-Optimized Distance Functions
-// ============================================================================
-
 #if HAS_SSE
-/**
- * SSE-optimized distance calculation for 4 centroids at once.
- */
 static void find_nearest_sse(
     const ColorPoint3f* RESTRICT points,
     int n,
@@ -125,10 +108,6 @@ static void find_nearest_sse(
     }
 }
 #endif
-
-// ============================================================================
-// Batch Assignment
-// ============================================================================
 
 AICHAT_EXPORT int assign_points_batch(
     const ColorPoint3f* points,

@@ -1,7 +1,3 @@
-/**
- * AICHAT Native Library - K-Means Clustering
- */
-
 #include "../include/kmeans.h"
 #include "../include/distance.h"
 #include "../include/random.h"
@@ -9,10 +5,6 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
-
-// ============================================================================
-// K-Means++ Initialization
-// ============================================================================
 
 AICHAT_EXPORT void kmeans_init_plusplus(
     const ColorPoint3f* points,
@@ -64,10 +56,6 @@ AICHAT_EXPORT void kmeans_init_plusplus(
     
     free(distances);
 }
-
-// ============================================================================
-// Centroid Update
-// ============================================================================
 
 AICHAT_EXPORT float kmeans_update_centroids(
     const ColorPoint3f* points,
@@ -125,10 +113,6 @@ AICHAT_EXPORT float kmeans_update_centroids(
     
     return sqrtf(max_movement);
 }
-
-// ============================================================================
-// Full K-Means Clustering
-// ============================================================================
 
 AICHAT_EXPORT int kmeans_cluster(
     const ColorPoint3f* points,

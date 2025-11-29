@@ -6,35 +6,20 @@ import aichat.native_.NativeAccelerator;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Utility class for converting between RGB and CIELAB color spaces.
- * CIELAB is perceptually uniform, meaning Euclidean distance in CIELAB space
- * approximates human perception of color difference.
- * 
- * Supports native acceleration via Panama FFI for batch conversions.
- */
 public final class ColorSpaceConverter {
     
-    // D65 standard illuminant reference values
     private static final double REF_X = 95.047;
     private static final double REF_Y = 100.000;
     private static final double REF_Z = 108.883;
     
-    // Threshold for LAB conversion
     private static final double EPSILON = 0.008856;
     private static final double KAPPA = 903.3;
     private static final double DELTA = 6.0 / 29.0;
     
     private static final NativeAccelerator nativeAccelerator = NativeAccelerator.getInstance();
     
-    private ColorSpaceConverter() {
-        // Utility class - no instantiation
-    }
+    private ColorSpaceConverter() {}
     
-    /**
-     * Converts a batch of RGB colors to CIELAB.
-     * Uses native acceleration when available.
-     */
     public static List<ColorPoint> rgbToLabBatch(List<ColorPoint> rgbColors) {
         if (rgbColors == null || rgbColors.isEmpty()) {
             return new ArrayList<>();
@@ -56,10 +41,6 @@ public final class ColorSpaceConverter {
         return result;
     }
     
-    /**
-     * Converts a batch of CIELAB colors to RGB.
-     * Uses native acceleration when available.
-     */
     public static List<ColorPoint> labToRgbBatch(List<ColorPoint> labColors) {
         if (labColors == null || labColors.isEmpty()) {
             return new ArrayList<>();
@@ -81,17 +62,11 @@ public final class ColorSpaceConverter {
         return result;
     }
 
-    /**
-     * Converts an RGB color to CIELAB color space.
-     */
     public static ColorPoint rgbToLab(ColorPoint rgb) {
         double[] xyz = rgbToXyz(rgb.c1(), rgb.c2(), rgb.c3());
         return xyzToLab(xyz[0], xyz[1], xyz[2]);
     }
     
-    /**
-     * Converts a CIELAB color to RGB color space.
-     */
     public static ColorPoint labToRgb(ColorPoint lab) {
         double[] xyz = labToXyz(lab.c1(), lab.c2(), lab.c3());
         return xyzToRgb(xyz[0], xyz[1], xyz[2]);

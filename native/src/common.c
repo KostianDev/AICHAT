@@ -1,7 +1,3 @@
-/**
- * AICHAT Native Library - Common Functions
- */
-
 #include "../include/common.h"
 
 AICHAT_EXPORT const char* aichat_native_version(void) {

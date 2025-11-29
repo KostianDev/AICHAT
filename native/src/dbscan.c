@@ -1,19 +1,8 @@
-/**
- * AICHAT Native Library - DBSCAN Clustering
- * 
- * Optimized implementation with grid-based spatial index.
- * Based on "DBSCAN Revisited, Revisited" (Schubert et al., 2017).
- */
-
 #include "../include/dbscan.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <float.h>
-
-// ============================================================================
-// Grid-based Spatial Index
-// ============================================================================
 
 typedef struct {
     int* indices;
@@ -168,10 +157,6 @@ static int grid_range_query(
     return count;
 }
 
-// ============================================================================
-// Epsilon Calculation
-// ============================================================================
-
 AICHAT_EXPORT float dbscan_calculate_eps(
     const ColorPoint3f* points,
     int n,
@@ -250,10 +235,6 @@ AICHAT_EXPORT float dbscan_calculate_eps(
     
     return eps;
 }
-
-// ============================================================================
-// DBSCAN Clustering
-// ============================================================================
 
 AICHAT_EXPORT int dbscan_cluster(
     const ColorPoint3f* points,
@@ -347,10 +328,6 @@ AICHAT_EXPORT int dbscan_cluster(
     
     return cluster_id;
 }
-
-// ============================================================================
-// Centroid Calculation
-// ============================================================================
 
 AICHAT_EXPORT void dbscan_calculate_centroids(
     const ColorPoint3f* points,
