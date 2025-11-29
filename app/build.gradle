@@ -48,6 +48,7 @@ dependencies {
 
 application {
     mainClass = 'aichat.App'
+    applicationDefaultJvmArgs = ['--enable-native-access=javafx.graphics']
 }
 
 tasks.named('test') {

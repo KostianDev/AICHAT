@@ -54,7 +54,8 @@ public class DbscanClusterer implements ClusteringStrategy {
             }
         }
         
-        return calculateCentroids(points, labels, clusterId);
+        List<ColorPoint> centroids = calculateCentroids(points, labels, clusterId);
+        return reduceCentroids(centroids, k);
     }
     
     private double calculateAdaptiveEps(List<ColorPoint> points, int k) {
@@ -131,6 +132,7 @@ public class DbscanClusterer implements ClusteringStrategy {
     
     private List<ColorPoint> calculateCentroids(List<ColorPoint> points, int[] labels, int numClusters) {
         List<ColorPoint> centroids = new ArrayList<>();
+        List<Integer> clusterSizes = new ArrayList<>();
         
         for (int cluster = 0; cluster < numClusters; cluster++) {
             double sumC1 = 0, sumC2 = 0, sumC3 = 0;
@@ -148,6 +150,7 @@ public class DbscanClusterer implements ClusteringStrategy {
             
             if (count > 0) {
                 centroids.add(new ColorPoint(sumC1 / count, sumC2 / count, sumC3 / count));
+                clusterSizes.add(count);
             }
         }
         
@@ -166,6 +169,46 @@ public class DbscanClusterer implements ClusteringStrategy {
         }
         
         return centroids;
+    }
+    
+    /**
+     * Reduces the number of centroids to k by merging the closest clusters.
+     */
+    private List<ColorPoint> reduceCentroids(List<ColorPoint> centroids, int k) {
+        if (centroids.size() <= k) {
+            return centroids;
+        }
+        
+        List<ColorPoint> result = new ArrayList<>(centroids);
+        
+        while (result.size() > k) {
+            double minDist = Double.MAX_VALUE;
+            int mergeI = 0, mergeJ = 1;
+            
+            for (int i = 0; i < result.size(); i++) {
+                for (int j = i + 1; j < result.size(); j++) {
+                    double dist = result.get(i).distanceTo(result.get(j));
+                    if (dist < minDist) {
+                        minDist = dist;
+                        mergeI = i;
+                        mergeJ = j;
+                    }
+                }
+            }
+            
+            ColorPoint p1 = result.get(mergeI);
+            ColorPoint p2 = result.get(mergeJ);
+            ColorPoint merged = new ColorPoint(
+                (p1.c1() + p2.c1()) / 2,
+                (p1.c2() + p2.c2()) / 2,
+                (p1.c3() + p2.c3()) / 2
+            );
+            
+            result.remove(mergeJ);
+            result.set(mergeI, merged);
+        }
+        
+        return result;
     }
     
     public double getEps() {

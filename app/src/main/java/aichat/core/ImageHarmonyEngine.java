@@ -9,7 +9,9 @@ import aichat.model.ColorPoint;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 /**
  * Main orchestrator for image analysis and resynthesis.
@@ -24,6 +26,9 @@ public class ImageHarmonyEngine {
     public enum ColorModel {
         RGB, CIELAB
     }
+    
+    private static final int MAX_PIXELS_KMEANS = 50000;
+    private static final int MAX_PIXELS_DBSCAN = 5000;
     
     private final Algorithm algorithm;
     private final ColorModel colorModel;
@@ -47,7 +52,11 @@ public class ImageHarmonyEngine {
      */
     public ColorPalette analyze(BufferedImage image, int k) {
         List<ColorPoint> pixels = extractPixels(image);
-        List<ColorPoint> workingPixels = convertColorSpace(pixels, true);
+        
+        int maxPixels = (algorithm == Algorithm.DBSCAN) ? MAX_PIXELS_DBSCAN : MAX_PIXELS_KMEANS;
+        List<ColorPoint> sampledPixels = samplePixels(pixels, maxPixels);
+        
+        List<ColorPoint> workingPixels = convertColorSpace(sampledPixels, true);
         List<ColorPoint> centroids = clusteringStrategy.cluster(workingPixels, k);
         List<ColorPoint> resultColors = convertColorSpace(centroids, false);
         
@@ -95,6 +104,16 @@ public class ImageHarmonyEngine {
         }
         
         return pixels;
+    }
+    
+    private List<ColorPoint> samplePixels(List<ColorPoint> pixels, int maxSize) {
+        if (pixels.size() <= maxSize) {
+            return pixels;
+        }
+        
+        List<ColorPoint> sampled = new ArrayList<>(pixels);
+        Collections.shuffle(sampled, new Random(42));
+        return sampled.subList(0, maxSize);
     }
     
     private List<ColorPoint> convertColorSpace(List<ColorPoint> points, boolean toLab) {
