@@ -346,31 +346,72 @@ public class MainController {
     }
     
     private void loadImage(File file, boolean isSource) {
-        try {
-            BufferedImage image = ImageIO.read(file);
-            if (image == null) {
+        statusLabel.setText("Loading: " + file.getName() + "...");
+        
+        String url = file.toURI().toString();
+        
+        // Load scaled preview for instant display (max 800px, smooth scaling)
+        Image preview = new Image(url, 800, 800, true, true, true);
+        
+        // Set preview immediately when available
+        preview.progressProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.doubleValue() >= 1.0 && !preview.isError()) {
+                if (isSource) {
+                    sourceImageView.setImage(preview);
+                    sourcePalette = null;
+                    sourcePalettePane.getChildren().clear();
+                } else {
+                    targetImageView.setImage(preview);
+                    targetPalette = null;
+                    targetPalettePane.getChildren().clear();
+                }
+                updateButtonStates();
+            }
+        });
+        
+        // Load full resolution in background for display
+        Image fullImage = new Image(url, true);
+        fullImage.progressProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.doubleValue() >= 1.0 && !fullImage.isError()) {
+                if (isSource) {
+                    sourceImageView.setImage(fullImage);
+                } else {
+                    targetImageView.setImage(fullImage);
+                }
+                
+                // Load BufferedImage for processing
+                loadBufferedImageAsync(file, isSource);
+                
+                statusLabel.setText("Loaded: " + file.getName() + 
+                    " (" + (int)fullImage.getWidth() + "x" + (int)fullImage.getHeight() + ")");
+            }
+        });
+        
+        preview.errorProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
                 showAlert("Load Error", "Could not read image file.");
-                return;
+                statusLabel.setText("Ready.");
+            }
+        });
+    }
+    
+    private void loadBufferedImageAsync(File file, boolean isSource) {
+        Task<BufferedImage> task = new Task<>() {
+            @Override
+            protected BufferedImage call() throws IOException {
+                return ImageIO.read(file);
             }
             
-            if (isSource) {
-                sourceImage = image;
-                sourcePalette = null;  // Reset palette when new image loaded
-                sourcePalettePane.getChildren().clear();
-                displayImage(sourceImageView, image);
-            } else {
-                targetImage = image;
-                targetPalette = null;  // Reset palette when new image loaded
-                targetPalettePane.getChildren().clear();
-                displayImage(targetImageView, image);
+            @Override
+            protected void succeeded() {
+                if (isSource) {
+                    sourceImage = getValue();
+                } else {
+                    targetImage = getValue();
+                }
             }
-            
-            statusLabel.setText("Loaded: " + file.getName() + " (" + image.getWidth() + "x" + image.getHeight() + ")");
-            updateButtonStates();
-            
-        } catch (IOException e) {
-            showAlert("Load Error", "Failed to load image: " + e.getMessage());
-        }
+        };
+        new Thread(task).start();
     }
     
     private void displayImage(ImageView imageView, BufferedImage image) {
