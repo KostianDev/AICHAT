@@ -3,14 +3,17 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml/1" 
             fx:controller="aichat.ui.MainController"
-            prefWidth="1400" prefHeight="900">
+            prefWidth="1400" prefHeight="900"
+            minWidth="800" minHeight="600"
+            stylesheets="@dark-theme.css">
     
     <top>
-        <VBox>
-            <MenuBar>
+        <VBox styleClass="top-container">
+            <MenuBar styleClass="menu-bar">
                 <menus>
                     <Menu text="File">
                         <items>
@@ -28,67 +31,79 @@
                 </menus>
             </MenuBar>
             
-            <ToolBar>
-                <Button fx:id="loadSourceButton" text="Load Source" onAction="#handleLoadSource"/>
-                <Button fx:id="loadTargetButton" text="Load Target" onAction="#handleLoadTarget"/>
-                <Separator/>
+            <ToolBar styleClass="tool-bar">
+                <padding><Insets top="12" bottom="12" left="16" right="16"/></padding>
+                <Button fx:id="loadSourceButton" text="Load Source" onAction="#handleLoadSource" styleClass="toolbar-button"/>
+                <Button fx:id="loadTargetButton" text="Load Target" onAction="#handleLoadTarget" styleClass="toolbar-button"/>
+                <Separator orientation="VERTICAL"/>
                 
-                <Label text="Algorithm:"/>
-                <ComboBox fx:id="algorithmCombo" prefWidth="100"/>
+                <Label text="Algorithm:" styleClass="toolbar-label"/>
+                <ComboBox fx:id="algorithmCombo" prefWidth="150" styleClass="toolbar-combo"/>
                 
-                <Label text="Color Model:"/>
-                <ComboBox fx:id="colorModelCombo" prefWidth="100"/>
+                <Label text="Color Model:" styleClass="toolbar-label"/>
+                <ComboBox fx:id="colorModelCombo" prefWidth="150" styleClass="toolbar-combo"/>
                 
-                <Label text="Colors (k):"/>
-                <Spinner fx:id="kSpinner" prefWidth="70"/>
+                <Label text="Colors (k):" styleClass="toolbar-label"/>
+                <Spinner fx:id="kSpinner" prefWidth="100" styleClass="toolbar-spinner"/>
                 
-                <Separator/>
-                <Button fx:id="analyzeButton" text="Analyze" onAction="#handleAnalyze"/>
-                <Button fx:id="resynthesizeButton" text="Resynthesize" onAction="#handleResynthesize"/>
+                <Separator orientation="VERTICAL"/>
+                <Button fx:id="analyzeButton" text="Analyze" onAction="#handleAnalyze" styleClass="toolbar-button,action-button"/>
+                <Button fx:id="resynthesizeButton" text="Resynthesize" onAction="#handleResynthesize" styleClass="toolbar-button,action-button-primary"/>
             </ToolBar>
         </VBox>
     </top>
     
     <center>
-        <SplitPane fx:id="mainSplitPane" dividerPositions="0.5" orientation="HORIZONTAL">
-            <VBox spacing="10" style="-fx-padding: 15;">
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Source Image" style="-fx-font-weight: bold; -fx-font-size: 16px;"/>
+        <SplitPane fx:id="mainSplitPane" dividerPositions="0.5" orientation="HORIZONTAL" styleClass="main-split-pane">
+            <VBox spacing="12" styleClass="image-panel">
+                <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <Label text="Source Image" styleClass="panel-title"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Load" onAction="#handleLoadSource" style="-fx-font-size: 11px;"/>
+                    <Button text="Load" onAction="#handleLoadSource" styleClass="small-button"/>
                 </HBox>
-                <ScrollPane fitToWidth="true" fitToHeight="true" VBox.vgrow="ALWAYS" 
-                            style="-fx-background-color: #2b2b2b;">
-                    <ImageView fx:id="sourceImageView" preserveRatio="true"/>
+                <ScrollPane fx:id="sourceScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
+                    <StackPane fx:id="sourceImageContainer" styleClass="image-container">
+                        <ImageView fx:id="sourceImageView" preserveRatio="true"/>
+                    </StackPane>
                 </ScrollPane>
-                <TitledPane text="Source Palette" expanded="true" collapsible="true">
-                    <FlowPane fx:id="sourcePalettePane" hgap="5" vgap="5" prefHeight="90" 
-                              style="-fx-padding: 8;"/>
+                <TitledPane text="Source Palette" expanded="true" collapsible="true" styleClass="palette-pane" maxHeight="160" minHeight="160">
+                    <ScrollPane fitToWidth="true" styleClass="palette-scroll">
+                        <FlowPane fx:id="sourcePalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                            <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                        </FlowPane>
+                    </ScrollPane>
                 </TitledPane>
             </VBox>
             
-            <VBox spacing="10" style="-fx-padding: 15;">
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Target Image" style="-fx-font-weight: bold; -fx-font-size: 16px;"/>
+            <VBox spacing="12" styleClass="image-panel">
+                <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <Label text="Target Image" styleClass="panel-title"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Load" onAction="#handleLoadTarget" style="-fx-font-size: 11px;"/>
+                    <Button text="Load" onAction="#handleLoadTarget" styleClass="small-button"/>
                 </HBox>
-                <ScrollPane fitToWidth="true" fitToHeight="true" VBox.vgrow="ALWAYS"
-                            style="-fx-background-color: #2b2b2b;">
-                    <ImageView fx:id="targetImageView" preserveRatio="true"/>
+                <ScrollPane fx:id="targetScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
+                    <StackPane fx:id="targetImageContainer" styleClass="image-container">
+                        <ImageView fx:id="targetImageView" preserveRatio="true"/>
+                    </StackPane>
                 </ScrollPane>
-                <TitledPane text="Target Palette" expanded="true" collapsible="true">
-                    <FlowPane fx:id="targetPalettePane" hgap="5" vgap="5" prefHeight="90"
-                              style="-fx-padding: 8;"/>
+                <TitledPane text="Target Palette" expanded="true" collapsible="true" styleClass="palette-pane" maxHeight="160" minHeight="160">
+                    <ScrollPane fitToWidth="true" styleClass="palette-scroll">
+                        <FlowPane fx:id="targetPalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                            <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                        </FlowPane>
+                    </ScrollPane>
                 </TitledPane>
             </VBox>
         </SplitPane>
     </center>
     
     <bottom>
-        <HBox spacing="10" style="-fx-padding: 10; -fx-background-color: #f0f0f0;">
-            <ProgressBar fx:id="progressBar" prefWidth="200"/>
-            <Label fx:id="statusLabel" text="Ready"/>
+        <HBox spacing="16" styleClass="status-bar" alignment="CENTER_LEFT">
+            <padding><Insets top="12" bottom="12" left="20" right="20"/></padding>
+            <ProgressBar fx:id="progressBar" prefWidth="300" prefHeight="24"/>
+            <Label fx:id="statusLabel" text="Ready" styleClass="status-label"/>
         </HBox>
     </bottom>
 </BorderPane>

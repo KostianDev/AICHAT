@@ -31,6 +31,12 @@ public class MainController {
     @FXML private ImageView sourceImageView;
     @FXML private ImageView targetImageView;
     
+    @FXML private ScrollPane sourceScrollPane;
+    @FXML private ScrollPane targetScrollPane;
+    
+    @FXML private StackPane sourceImageContainer;
+    @FXML private StackPane targetImageContainer;
+    
     @FXML private SplitPane mainSplitPane;
     
     @FXML private ComboBox<Algorithm> algorithmCombo;
@@ -68,16 +74,53 @@ public class MainController {
         SpinnerValueFactory<Integer> kFactory = 
             new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 32, 5);
         kSpinner.setValueFactory(kFactory);
+        kSpinner.setEditable(true);
         
-        // Bind image views to scroll pane size for responsive scaling
-        sourceImageView.fitWidthProperty().bind(
-            mainSplitPane.widthProperty().multiply(0.45));
-        targetImageView.fitWidthProperty().bind(
-            mainSplitPane.widthProperty().multiply(0.45));
+        kSpinner.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
+            if (!newValue.matches("\\d*")) {
+                kSpinner.getEditor().setText(oldValue);
+            }
+        });
+        
+        kSpinner.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (!isFocused) {
+                try {
+                    int value = Integer.parseInt(kSpinner.getEditor().getText());
+                    value = Math.max(2, Math.min(32, value));
+                    kSpinner.getValueFactory().setValue(value);
+                } catch (NumberFormatException e) {
+                    kSpinner.getValueFactory().setValue(5);
+                }
+            }
+        });
+        
+        setupResponsiveImageViews();
         
         updateButtonStates();
         statusLabel.setText("Ready. Load images to begin.");
         progressBar.setProgress(0);
+    }
+    
+    private void setupResponsiveImageViews() {
+        sourceImageContainer.minWidthProperty().bind(sourceScrollPane.widthProperty());
+        sourceImageContainer.minHeightProperty().bind(sourceScrollPane.heightProperty());
+        
+        targetImageContainer.minWidthProperty().bind(targetScrollPane.widthProperty());
+        targetImageContainer.minHeightProperty().bind(targetScrollPane.heightProperty());
+        
+        sourceImageView.fitWidthProperty().bind(
+            sourceScrollPane.widthProperty().subtract(40));
+        sourceImageView.fitHeightProperty().bind(
+            sourceScrollPane.heightProperty().subtract(40));
+        
+        targetImageView.fitWidthProperty().bind(
+            targetScrollPane.widthProperty().subtract(40));
+        targetImageView.fitHeightProperty().bind(
+            targetScrollPane.heightProperty().subtract(40));
+        
+        mainSplitPane.getDividers().get(0).positionProperty().addListener((obs, oldVal, newVal) -> {
+            mainSplitPane.setDividerPositions(0.5);
+        });
     }
     
     @FXML
@@ -199,36 +242,48 @@ public class MainController {
         Image fxImage = SwingFXUtils.toFXImage(image, null);
         ImageView imageView = new ImageView(fxImage);
         imageView.setPreserveRatio(true);
-        imageView.setFitWidth(Math.min(image.getWidth(), 1200));
-        imageView.setFitHeight(Math.min(image.getHeight(), 800));
         
-        ScrollPane scrollPane = new ScrollPane(imageView);
+        StackPane imageContainer = new StackPane(imageView);
+        imageContainer.setStyle("-fx-background-color: #1e1e1e;");
+        
+        ScrollPane scrollPane = new ScrollPane(imageContainer);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
-        scrollPane.setStyle("-fx-background-color: #2b2b2b;");
+        scrollPane.setStyle("-fx-background-color: #1e1e1e; -fx-background: #1e1e1e;");
         
         Button saveButton = new Button("Save Image");
+        saveButton.setStyle("-fx-background-color: #2563eb; -fx-text-fill: white; " +
+                          "-fx-font-size: 14px; -fx-padding: 10 24; -fx-background-radius: 6; -fx-cursor: hand;");
         saveButton.setOnAction(e -> handleSaveResult());
         
         Button closeButton = new Button("Close");
+        closeButton.setStyle("-fx-background-color: #3c3c3c; -fx-text-fill: #e0e0e0; " +
+                           "-fx-font-size: 14px; -fx-padding: 10 24; -fx-background-radius: 6; -fx-cursor: hand;");
         closeButton.setOnAction(e -> resultStage.close());
         
-        HBox buttonBar = new HBox(10, saveButton, closeButton);
+        HBox buttonBar = new HBox(12, saveButton, closeButton);
         buttonBar.setAlignment(Pos.CENTER);
-        buttonBar.setPadding(new Insets(10));
-        buttonBar.setStyle("-fx-background-color: #f0f0f0;");
+        buttonBar.setPadding(new Insets(16));
+        buttonBar.setStyle("-fx-background-color: #252525;");
         
         BorderPane root = new BorderPane();
         root.setCenter(scrollPane);
         root.setBottom(buttonBar);
+        root.setStyle("-fx-background-color: #1e1e1e;");
         
-        Scene scene = new Scene(root, 
-            Math.min(image.getWidth() + 40, 1240), 
-            Math.min(image.getHeight() + 80, 880));
+        int windowWidth = image.getWidth() + 40;
+        int windowHeight = image.getHeight() + 100;
+        
+        Scene scene = new Scene(root, windowWidth, windowHeight);
         
         resultStage.setScene(scene);
+        resultStage.setMinWidth(400);
+        resultStage.setMinHeight(300);
         resultStage.show();
         resultStage.toFront();
+        
+        imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(20));
+        imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(20));
     }
     
     private void handleSaveResult() {
@@ -275,6 +330,7 @@ public class MainController {
         alert.setTitle("About AICHAT");
         alert.setHeaderText("AICHAT - Advanced Image Color Harmony Analysis and Transformation");
         alert.setContentText("Version 1.0\n\nKPI Igor Sikorsky, 2025");
+        applyDarkStyleToDialog(alert);
         alert.showAndWait();
     }
     
@@ -327,22 +383,22 @@ public class MainController {
         if (palette == null) return;
         
         for (ColorPoint color : palette.getColors()) {
-            VBox colorBox = new VBox(2);
-            colorBox.setStyle("-fx-alignment: center;");
+            VBox colorBox = new VBox(4);
+            colorBox.setAlignment(Pos.CENTER);
             
-            Rectangle rect = new Rectangle(45, 45);
+            Rectangle rect = new Rectangle(50, 50);
             rect.setFill(Color.rgb(
                 clamp((int) color.c1()),
                 clamp((int) color.c2()),
                 clamp((int) color.c3())
             ));
-            rect.setStroke(Color.GRAY);
+            rect.setStroke(Color.web("#555555"));
             rect.setStrokeWidth(1);
-            rect.setArcWidth(5);
-            rect.setArcHeight(5);
+            rect.setArcWidth(8);
+            rect.setArcHeight(8);
             
             Label hexLabel = new Label(color.toHexString());
-            hexLabel.setStyle("-fx-font-size: 10px; -fx-font-family: monospace;");
+            hexLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: #b0b0b0;");
             
             colorBox.getChildren().addAll(rect, hexLabel);
             pane.getChildren().add(colorBox);
@@ -374,6 +430,30 @@ public class MainController {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(content);
+        applyDarkStyleToDialog(alert);
         alert.showAndWait();
+    }
+    
+    private void applyDarkStyleToDialog(Alert alert) {
+        DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.setStyle(
+            "-fx-background-color: #252525;" +
+            "-fx-font-size: 14px;"
+        );
+        dialogPane.lookup(".content.label").setStyle("-fx-text-fill: #e0e0e0;");
+        
+        if (dialogPane.lookup(".header-panel") != null) {
+            dialogPane.lookup(".header-panel").setStyle("-fx-background-color: #2b2b2b;");
+        }
+        
+        dialogPane.getButtonTypes().forEach(buttonType -> {
+            Button button = (Button) dialogPane.lookupButton(buttonType);
+            if (button != null) {
+                button.setStyle(
+                    "-fx-background-color: #3c3c3c; -fx-text-fill: #e0e0e0; " +
+                    "-fx-background-radius: 6; -fx-padding: 8 20; -fx-cursor: hand;"
+                );
+            }
+        });
     }
 }
