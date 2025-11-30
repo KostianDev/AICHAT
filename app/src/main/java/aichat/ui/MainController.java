@@ -6,6 +6,7 @@ import aichat.export.PaletteExporter;
 import aichat.export.PaletteExporter.ExportFormat;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
+import aichat.native_.NativeAccelerator;
 
 import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
@@ -24,9 +25,13 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.ImageReadParam;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
 
 public class MainController {
     
@@ -64,6 +69,12 @@ public class MainController {
     private BufferedImage sourceImage;
     private BufferedImage targetImage;
     private BufferedImage resultImage;
+    
+    // Loading state tracking
+    private volatile boolean sourceLoading = false;
+    private volatile boolean targetLoading = false;
+    private volatile long sourceLoadId = 0;  // To track which load operation is current
+    private volatile long targetLoadId = 0;
     
     private ColorPalette sourcePalette;
     private ColorPalette targetPalette;
@@ -145,18 +156,30 @@ public class MainController {
     
     @FXML
     private void handleSwap() {
+        // Don't swap if images are still loading
+        if (sourceLoading || targetLoading) {
+            showAlert("Please Wait", "Images are still loading. Please wait before swapping.");
+            return;
+        }
+        
+        if (sourceImage == null || targetImage == null) {
+            showAlert("Cannot Swap", "Both source and target images must be loaded.");
+            return;
+        }
+        
+        // Swap BufferedImages
         BufferedImage tempImage = sourceImage;
         sourceImage = targetImage;
         targetImage = tempImage;
         
+        // Swap palettes
         ColorPalette tempPalette = sourcePalette;
         sourcePalette = targetPalette;
         targetPalette = tempPalette;
         
-        Image srcFx = sourceImageView.getImage();
-        Image tgtFx = targetImageView.getImage();
-        sourceImageView.setImage(tgtFx);
-        targetImageView.setImage(srcFx);
+        // Update displays from BufferedImages (ensures sync)
+        sourceImageView.setImage(SwingFXUtils.toFXImage(sourceImage, null));
+        targetImageView.setImage(SwingFXUtils.toFXImage(targetImage, null));
         
         displayPalette(sourcePalettePane, sourcePalette);
         displayPalette(targetPalettePane, targetPalette);
@@ -167,6 +190,11 @@ public class MainController {
     
     @FXML
     private void handleAnalyze() {
+        if (sourceLoading || targetLoading) {
+            showAlert("Please Wait", "Images are still loading. Please wait before analyzing.");
+            return;
+        }
+        
         if (sourceImage == null && targetImage == null) {
             showAlert("No Image", "Please load at least one image to analyze.");
             return;
@@ -175,6 +203,10 @@ public class MainController {
         ColorModel colorModel = colorModelCombo.getValue();
         int k = kSpinner.getValue();
         
+        runAnalysis(colorModel, k);
+    }
+    
+    private void runAnalysis(ColorModel colorModel, int k) {
         setProcessing(true, "Analyzing images...");
         
         Task<Void> analyzeTask = new Task<>() {
@@ -368,69 +400,157 @@ public class MainController {
     }
     
     private void loadImage(File file, boolean isSource) {
+        // Mark as loading and invalidate current image
+        if (isSource) {
+            sourceLoading = true;
+            sourceImage = null;
+            sourcePalette = null;
+            sourceLoadId++;
+            sourcePalettePane.getChildren().clear();
+        } else {
+            targetLoading = true;
+            targetImage = null;
+            targetPalette = null;
+            targetLoadId++;
+            targetPalettePane.getChildren().clear();
+        }
+        
+        updateButtonStates();
         statusLabel.setText("Loading: " + file.getName() + "...");
+        progressBar.setProgress(-1); // Indeterminate
         
+        // Capture load ID to detect if a newer load was started
+        final long currentLoadId = isSource ? sourceLoadId : targetLoadId;
+        
+        // Step 1: Show preview immediately using JavaFX async loading (fast, downscaled)
         String url = file.toURI().toString();
-        
-        Image preview = new Image(url, 800, 800, true, true, true);
+        Image preview = new Image(url, 1200, 1200, true, true, true); // Async, scaled
         
         preview.progressProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal.doubleValue() >= 1.0 && !preview.isError()) {
-                if (isSource) {
-                    sourceImageView.setImage(preview);
-                    sourcePalette = null;
-                    sourcePalettePane.getChildren().clear();
-                } else {
-                    targetImageView.setImage(preview);
-                    targetPalette = null;
-                    targetPalettePane.getChildren().clear();
+                // Show preview while full image loads
+                long activeLoadId = isSource ? sourceLoadId : targetLoadId;
+                if (currentLoadId == activeLoadId) {
+                    if (isSource) {
+                        sourceImageView.setImage(preview);
+                    } else {
+                        targetImageView.setImage(preview);
+                    }
+                    statusLabel.setText("Loading full image: " + file.getName() + "...");
                 }
-                updateButtonStates();
             }
         });
         
-        Image fullImage = new Image(url, true);
-        fullImage.progressProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal.doubleValue() >= 1.0 && !fullImage.isError()) {
-                if (isSource) {
-                    sourceImageView.setImage(fullImage);
-                } else {
-                    targetImageView.setImage(fullImage);
-                }
-                
-                loadBufferedImageAsync(file, isSource);
-                
-                statusLabel.setText("Loaded: " + file.getName() + 
-                    " (" + (int)fullImage.getWidth() + "x" + (int)fullImage.getHeight() + ")");
-            }
-        });
-        
-        preview.errorProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal) {
-                showAlert("Load Error", "Could not read image file.");
-                statusLabel.setText("Ready.");
-            }
-        });
-    }
-    
-    private void loadBufferedImageAsync(File file, boolean isSource) {
-        Task<BufferedImage> task = new Task<>() {
+        // Step 2: Load full BufferedImage in background with optimizations
+        Task<BufferedImage> loadTask = new Task<>() {
             @Override
             protected BufferedImage call() throws IOException {
-                return ImageIO.read(file);
+                return readImageOptimized(file);
             }
             
             @Override
             protected void succeeded() {
+                // Check if this load is still current
+                long activeLoadId = isSource ? sourceLoadId : targetLoadId;
+                if (currentLoadId != activeLoadId) {
+                    return;
+                }
+                
+                BufferedImage img = getValue();
+                if (img == null) {
+                    showAlert("Load Error", "Could not read image file.");
+                    if (isSource) {
+                        sourceLoading = false;
+                    } else {
+                        targetLoading = false;
+                    }
+                    updateButtonStates();
+                    progressBar.setProgress(0);
+                    statusLabel.setText("Ready.");
+                    return;
+                }
+                
                 if (isSource) {
-                    sourceImage = getValue();
+                    sourceImage = img;
+                    sourceLoading = false;
                 } else {
-                    targetImage = getValue();
+                    targetImage = img;
+                    targetLoading = false;
+                }
+                
+                updateButtonStates();
+                progressBar.setProgress(0);
+                statusLabel.setText("Loaded: " + file.getName() + 
+                    " (" + img.getWidth() + "x" + img.getHeight() + ")");
+            }
+            
+            @Override
+            protected void failed() {
+                long activeLoadId = isSource ? sourceLoadId : targetLoadId;
+                if (currentLoadId != activeLoadId) {
+                    return;
+                }
+                
+                showAlert("Load Error", "Failed to load image: " + getException().getMessage());
+                if (isSource) {
+                    sourceLoading = false;
+                } else {
+                    targetLoading = false;
                 }
                 updateButtonStates();
+                progressBar.setProgress(0);
+                statusLabel.setText("Ready.");
             }
         };
-        new Thread(task).start();
+        
+        new Thread(loadTask).start();
+    }
+    
+    //Optimized image reading using TurboJPEG for JPEGs.
+    private BufferedImage readImageOptimized(File file) throws IOException {
+        String fileName = file.getName().toLowerCase();
+        
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            NativeAccelerator accel = NativeAccelerator.getInstance();
+            if (accel.hasTurboJpeg()) {
+                NativeAccelerator.DecodedImage decoded = accel.decodeJpeg(file.getAbsolutePath());
+                if (decoded != null) {
+                    BufferedImage img = new BufferedImage(
+                        decoded.width(), decoded.height(), BufferedImage.TYPE_INT_ARGB
+                    );
+                    img.setRGB(0, 0, decoded.width(), decoded.height(), 
+                        decoded.pixels(), 0, decoded.width());
+                    return img;
+                }
+                // TurboJPEG failed, fall through to standard path
+            }
+        }
+        
+        // Get appropriate reader
+        Iterator<ImageReader> readers;
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            readers = ImageIO.getImageReadersByFormatName("JPEG");
+        } else if (fileName.endsWith(".png")) {
+            readers = ImageIO.getImageReadersByFormatName("PNG");
+        } else {
+            // Fallback to standard ImageIO
+            return ImageIO.read(file);
+        }
+        
+        if (!readers.hasNext()) {
+            return ImageIO.read(file);
+        }
+        
+        ImageReader reader = readers.next();
+        try (ImageInputStream iis = ImageIO.createImageInputStream(file)) {
+            reader.setInput(iis, true, true); // seekForwardOnly=true, ignoreMetadata=true
+            
+            ImageReadParam param = reader.getDefaultReadParam();
+            
+            return reader.read(0, param);
+        } finally {
+            reader.dispose();
+        }
     }
     
     private void displayImage(ImageView imageView, BufferedImage image) {
@@ -477,14 +597,19 @@ public class MainController {
     }
     
     private void updateButtonStates() {
-        boolean hasSource = sourceImage != null;
-        boolean hasTarget = targetImage != null;
+        boolean hasSource = sourceImage != null && !sourceLoading;
+        boolean hasTarget = targetImage != null && !targetLoading;
+        boolean isLoading = sourceLoading || targetLoading;
         boolean hasPalettes = sourcePalette != null && targetPalette != null;
         boolean hasSourcePalette = sourcePalette != null;
         boolean hasTargetPalette = targetPalette != null;
         
-        analyzeButton.setDisable(!hasSource && !hasTarget);
-        resynthesizeButton.setDisable(!hasSource || !hasTarget || !hasPalettes);
+        // Disable analyze if still loading or no images
+        analyzeButton.setDisable(isLoading || (!hasSource && !hasTarget));
+        resynthesizeButton.setDisable(isLoading || !hasSource || !hasTarget || !hasPalettes);
+        
+        // Disable swap if loading or missing images
+        swapButton.setDisable(isLoading || !hasSource || !hasTarget);
         
         exportSourceOptimalBtn.setDisable(!hasSourcePalette);
         exportSourcePngBtn.setDisable(!hasSourcePalette);

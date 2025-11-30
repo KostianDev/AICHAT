@@ -160,10 +160,6 @@ public final class ColorSpaceConverter {
         return Math.max(min, Math.min(max, value));
     }
     
-    /**
-     * Calculates the CIEDE2000 color difference between two LAB colors.
-     * This is a more accurate perceptual color difference metric.
-     */
     public static double deltaE2000(ColorPoint lab1, ColorPoint lab2) {
         double l1 = lab1.c1(), a1 = lab1.c2(), b1 = lab1.c3();
         double l2 = lab2.c1(), a2 = lab2.c2(), b2 = lab2.c3();

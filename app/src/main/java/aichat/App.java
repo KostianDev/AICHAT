@@ -6,10 +6,6 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
-/**
- * AICHAT - Advanced Image Color Harmony Analysis and Transformation
- * Main JavaFX Application Entry Point
- */
 public class App extends Application {
 
     @Override

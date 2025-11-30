@@ -1,8 +1,3 @@
-/**
- * Hybrid DBSCAN + K-Means Clustering for Color Quantization
- * Based on Kumar Rahul et al. (2014) algorithm.
- */
-
 #include "../include/hybrid.h"
 #include "../include/kmeans.h"
 #include "../include/distance.h"

@@ -7,10 +7,6 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-/**
- * Hybrid DBSCAN + K-Means clustering for color palette extraction.
- * Based on Kumar Rahul et al. (2014) algorithm.
- */
 public class HybridClusterer implements ClusteringStrategy {
     
     private static final int DEFAULT_BLOCK_SIZE = 1000;

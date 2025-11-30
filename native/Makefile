@@ -14,14 +14,14 @@ endif
 
 CC = gcc
 CFLAGS = -O3 -march=native -ffast-math -fPIC -Wall -Wextra -DNDEBUG -fopenmp
-LIBS = -lm
+LIBS = -lm -lturbojpeg
 
 SRC_DIR = src
 INC_DIR = include
 BUILD_DIR = build
 TARGET_DIR = ../app/src/main/resources/native/$(PLATFORM)
 
-SRCS = $(SRC_DIR)/common.c $(SRC_DIR)/distance.c $(SRC_DIR)/kmeans.c $(SRC_DIR)/hybrid.c $(SRC_DIR)/color.c $(SRC_DIR)/image.c
+SRCS = $(SRC_DIR)/common.c $(SRC_DIR)/distance.c $(SRC_DIR)/kmeans.c $(SRC_DIR)/hybrid.c $(SRC_DIR)/color.c $(SRC_DIR)/image.c $(SRC_DIR)/turbojpeg_wrapper.c
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET = $(BUILD_DIR)/$(LIB_TARGET)
 

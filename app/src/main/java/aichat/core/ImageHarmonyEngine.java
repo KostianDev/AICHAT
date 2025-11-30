@@ -13,17 +13,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Main engine for color palette extraction and image resynthesis.
- * Uses hybrid DBSCAN + K-Means algorithm for optimal performance.
- */
 public class ImageHarmonyEngine {
     
     public enum ColorModel {
         RGB, CIELAB
     }
     
-    private static final int MAX_PIXELS = 10000;  // Reduced for speed
+    private static final int MAX_PIXELS = 10000;
+    private static final int MAX_TILE_PIXELS = 16 * 1024 * 1024;
     private static final long DEFAULT_SEED = 42L;
     
     private final ColorModel colorModel;
@@ -47,22 +44,28 @@ public class ImageHarmonyEngine {
     }
     
     public ColorPalette analyze(BufferedImage image, int k) {
-        List<ColorPoint> pixels = extractPixels(image);
-        List<ColorPoint> sampledPixels;
+        List<ColorPoint> sampledPixels = null;
         
         if (nativeAccelerator.isAvailable()) {
-            sampledPixels = nativeAccelerator.samplePixels(pixels, MAX_PIXELS, seed);
-            if (sampledPixels == null) {
-                sampledPixels = samplePixels(pixels, MAX_PIXELS);
-            }
-        } else {
-            sampledPixels = samplePixels(pixels, MAX_PIXELS);
+            int width = image.getWidth();
+            int height = image.getHeight();
+            int[] rawPixels = new int[width * height];
+            image.getRGB(0, 0, width, height, rawPixels, 0, width);
+            sampledPixels = nativeAccelerator.samplePixelsFromImage(rawPixels, MAX_PIXELS, seed);
         }
         
+        if (sampledPixels == null) {
+            sampledPixels = extractPixels(image, MAX_PIXELS);
+        }
+
+        if (k > sampledPixels.size()) {
+            k = sampledPixels.size();
+        }
+
         List<ColorPoint> workingPixels = convertColorSpace(sampledPixels, true);
         List<ColorPoint> centroids = clusteringStrategy.cluster(workingPixels, k);
         List<ColorPoint> resultColors = convertColorSpace(centroids, false);
-        
+
         return new ColorPalette(resultColors);
     }
     
@@ -82,8 +85,14 @@ public class ImageHarmonyEngine {
         
         int width = targetImage.getWidth();
         int height = targetImage.getHeight();
+        long totalPixels = (long) width * height;
         
         if (nativeAccelerator.isAvailable()) {
+            // Use tiled processing for very large images to limit memory
+            if (totalPixels > MAX_TILE_PIXELS) {
+                return resynthesizeTiled(targetImage, mappedSource, targetPalette);
+            }
+            
             int[] pixels = new int[width * height];
             targetImage.getRGB(0, 0, width, height, pixels, 0, width);
             
@@ -101,6 +110,64 @@ public class ImageHarmonyEngine {
         }
         
         return resynthesizeJava(targetImage, mappedSource, targetPalette);
+    }
+    
+    private BufferedImage resynthesizeTiled(BufferedImage targetImage,
+                                             ColorPalette mappedSource,
+                                             ColorPalette targetPalette) {
+        int width = targetImage.getWidth();
+        int height = targetImage.getHeight();
+        
+        int tileHeight = Math.max(1, MAX_TILE_PIXELS / width);
+        tileHeight = Math.min(height, (tileHeight / 64) * 64);
+        if (tileHeight == 0) tileHeight = 64;
+        
+        BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        
+        int y = 0;
+        while (y < height) {
+            int currentTileHeight = Math.min(tileHeight, height - y);
+            
+            int[] tilePixelsArray = new int[width * currentTileHeight];
+            targetImage.getRGB(0, y, width, currentTileHeight, tilePixelsArray, 0, width);
+            
+            int[] resultTile = nativeAccelerator.resynthesizeImage(
+                tilePixelsArray, width, currentTileHeight,
+                targetPalette, mappedSource
+            );
+            
+            if (resultTile != null) {
+                output.setRGB(0, y, width, currentTileHeight, resultTile, 0, width);
+            } else {
+                for (int ty = 0; ty < currentTileHeight; ty++) {
+                    for (int x = 0; x < width; x++) {
+                        int idx = ty * width + x;
+                        int rgb = tilePixelsArray[idx];
+                        ColorPoint pixel = ColorPoint.fromRGB(rgb);
+                        
+                        int closest = targetPalette.findClosestIndex(pixel);
+                        ColorPoint targetCenter = targetPalette.getColor(closest);
+                        ColorPoint sourceCenter = mappedSource.getColor(closest);
+                        
+                        double dc1 = pixel.c1() - targetCenter.c1();
+                        double dc2 = pixel.c2() - targetCenter.c2();
+                        double dc3 = pixel.c3() - targetCenter.c3();
+                        
+                        ColorPoint newColor = new ColorPoint(
+                            clamp(sourceCenter.c1() + dc1, 0, 255),
+                            clamp(sourceCenter.c2() + dc2, 0, 255),
+                            clamp(sourceCenter.c3() + dc3, 0, 255)
+                        );
+                        
+                        output.setRGB(x, y + ty, newColor.toRGB());
+                    }
+                }
+            }
+            
+            y += currentTileHeight;
+        }
+        
+        return output;
     }
     
     private BufferedImage resynthesizeJava(BufferedImage targetImage,
@@ -158,19 +225,44 @@ public class ImageHarmonyEngine {
         return closestIndex;
     }
     
-    private List<ColorPoint> extractPixels(BufferedImage image) {
-        List<ColorPoint> pixels = new ArrayList<>();
+    private List<ColorPoint> extractPixels(BufferedImage image, int maxSamples) {
         int width = image.getWidth();
         int height = image.getHeight();
-        
+        long total = (long) width * (long) height;
+
+        if (total <= maxSamples) {
+            List<ColorPoint> pixels = new ArrayList<>((int) total);
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int rgb = image.getRGB(x, y);
+                    pixels.add(ColorPoint.fromRGB(rgb));
+                }
+            }
+            return pixels;
+        }
+
+        // Reservoir sampling
+        List<ColorPoint> reservoir = new ArrayList<>(maxSamples);
+        Random rnd = new Random(seed);
+        long seen = 0;
+
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int rgb = image.getRGB(x, y);
-                pixels.add(ColorPoint.fromRGB(rgb));
+                ColorPoint cp = ColorPoint.fromRGB(rgb);
+                if (seen < maxSamples) {
+                    reservoir.add(cp);
+                } else {
+                    long j = Math.abs(rnd.nextLong()) % (seen + 1);
+                    if (j < maxSamples) {
+                        reservoir.set((int) j, cp);
+                    }
+                }
+                seen++;
             }
         }
-        
-        return pixels;
+
+        return reservoir;
     }
     
     private List<ColorPoint> samplePixels(List<ColorPoint> pixels, int maxSize) {

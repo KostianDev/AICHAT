@@ -24,6 +24,9 @@ public final class NativeLibrary {
     private final MethodHandle aichat_has_simd;
     private final MethodHandle hybrid_cluster;
     private final MethodHandle hybrid_calculate_dbscan_eps;
+    private final MethodHandle sample_pixels_from_image;
+    private final MethodHandle decode_jpeg_file_turbojpeg;
+    private final MethodHandle turbojpeg_free;
     
     public static final StructLayout COLOR_POINT_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.JAVA_FLOAT.withName("c1"),
@@ -146,6 +149,28 @@ public final class NativeLibrary {
                     ValueLayout.JAVA_INT,
                     ValueLayout.JAVA_LONG
                 ));
+            
+            this.sample_pixels_from_image = lookupFunction("sample_pixels_from_image",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_LONG
+                ));
+            
+            this.decode_jpeg_file_turbojpeg = lookupFunction("decode_jpeg_file_turbojpeg",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS
+                ));
+            
+            this.turbojpeg_free = lookupFunction("turbojpeg_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
         } else {
             this.kmeans_cluster = null;
             this.assign_points_batch = null;
@@ -158,6 +183,9 @@ public final class NativeLibrary {
             this.aichat_has_simd = null;
             this.hybrid_cluster = null;
             this.hybrid_calculate_dbscan_eps = null;
+            this.sample_pixels_from_image = null;
+            this.decode_jpeg_file_turbojpeg = null;
+            this.turbojpeg_free = null;
         }
     }
     
@@ -469,5 +497,99 @@ public final class NativeLibrary {
         } catch (Throwable t) {
             throw new RuntimeException("Hybrid calculate eps failed", t);
         }
+    }
+    
+    public float[] samplePixelsFromImage(Arena arena, int[] imagePixels, int sampleSize, long seed) {
+        if (sample_pixels_from_image == null) {
+            throw new UnsupportedOperationException("Native library not loaded");
+        }
+        
+        int totalPixels = imagePixels.length;
+        int maxSamples = Math.min(totalPixels, sampleSize);
+        
+        MemorySegment imageNative = arena.allocate(ValueLayout.JAVA_INT, totalPixels);
+        MemorySegment outputNative = arena.allocate(COLOR_POINT_LAYOUT, maxSamples);
+        
+        imageNative.copyFrom(MemorySegment.ofArray(imagePixels));
+        
+        try {
+            int actualSize = (int) sample_pixels_from_image.invokeExact(
+                imageNative, totalPixels, outputNative, sampleSize, seed
+            );
+            
+            float[] result = new float[actualSize * 3];
+            for (int i = 0; i < actualSize; i++) {
+                long offset = i * COLOR_POINT_LAYOUT.byteSize();
+                result[i * 3] = outputNative.get(ValueLayout.JAVA_FLOAT, offset);
+                result[i * 3 + 1] = outputNative.get(ValueLayout.JAVA_FLOAT, offset + 4);
+                result[i * 3 + 2] = outputNative.get(ValueLayout.JAVA_FLOAT, offset + 8);
+            }
+            
+            return result;
+        } catch (Throwable t) {
+            throw new RuntimeException("Sample pixels from image native call failed", t);
+        }
+    }
+    
+    public record DecodedImage(int width, int height, int[] pixels) {}
+    
+    public DecodedImage decodeJpegFile(String filePath) {
+        if (decode_jpeg_file_turbojpeg == null || turbojpeg_free == null) {
+            return null; // TurboJPEG not available
+        }
+        
+        MemorySegment nativePixels = null;
+        
+        try (Arena arena = Arena.ofConfined()) {
+            // Allocate path string
+            MemorySegment pathNative = arena.allocateFrom(filePath);
+            
+            // Allocate output pointers
+            MemorySegment widthPtr = arena.allocate(ValueLayout.JAVA_INT);
+            MemorySegment heightPtr = arena.allocate(ValueLayout.JAVA_INT);
+            MemorySegment pixelsPtr = arena.allocate(ValueLayout.ADDRESS);
+            
+            int result = (int) decode_jpeg_file_turbojpeg.invokeExact(
+                pathNative, widthPtr, heightPtr, pixelsPtr
+            );
+            
+            if (result != 0) {
+                return null; // Decoding failed
+            }
+            
+            int width = widthPtr.get(ValueLayout.JAVA_INT, 0);
+            int height = heightPtr.get(ValueLayout.JAVA_INT, 0);
+            nativePixels = pixelsPtr.get(ValueLayout.ADDRESS, 0);
+            
+            if (nativePixels.equals(MemorySegment.NULL)) {
+                return null;
+            }
+            
+            // Reinterpret the segment to proper size and copy data
+            int numPixels = width * height;
+            MemorySegment pixels = nativePixels.reinterpret(numPixels * 4L);
+            
+            int[] pixelArray = new int[numPixels];
+            MemorySegment.ofArray(pixelArray).copyFrom(pixels);
+            
+            // Free native memory
+            turbojpeg_free.invokeExact(nativePixels);
+            nativePixels = null;
+            
+            return new DecodedImage(width, height, pixelArray);
+        } catch (Throwable t) {
+            // Try to free memory if allocated
+            if (nativePixels != null && !nativePixels.equals(MemorySegment.NULL)) {
+                try {
+                    turbojpeg_free.invokeExact(nativePixels);
+                } catch (Throwable ignored) {}
+            }
+            System.err.println("TurboJPEG decode failed: " + t.getMessage());
+            return null;
+        }
+    }
+    
+    public boolean hasTurboJpeg() {
+        return decode_jpeg_file_turbojpeg != null;
     }
 }

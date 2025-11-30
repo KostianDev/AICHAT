@@ -5,7 +5,6 @@
 #include "random.h"
 #include "distance.h"
 #include "kmeans.h"
-#include "dbscan.h"
 #include "color.h"
 #include "image.h"
 

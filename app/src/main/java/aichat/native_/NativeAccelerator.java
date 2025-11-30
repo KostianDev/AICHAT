@@ -120,6 +120,20 @@ public final class NativeAccelerator {
         }
     }
     
+    public List<ColorPoint> samplePixelsFromImage(int[] imagePixels, int sampleSize, long seed) {
+        if (!available || imagePixels.length == 0) {
+            return null;
+        }
+        
+        try (Arena arena = Arena.ofConfined()) {
+            float[] result = nativeLib.samplePixelsFromImage(arena, imagePixels, sampleSize, seed);
+            return floatArrayToColorPoints(result);
+        } catch (Exception e) {
+            System.err.println("Native image sampling failed: " + e.getMessage());
+            return null;
+        }
+    }
+    
     public int[] assignPointsBatch(List<ColorPoint> points, List<ColorPoint> centroids) {
         if (!available || points.isEmpty() || centroids.isEmpty()) {
             return null;
@@ -182,5 +196,28 @@ public final class NativeAccelerator {
     private static float[] colorPaletteToFloatArray(ColorPalette palette) {
         List<ColorPoint> colors = palette.getColors();
         return colorPointsToFloatArray(colors);
+    }
+    
+    public boolean hasTurboJpeg() {
+        return available && nativeLib.hasTurboJpeg();
+    }
+    
+    public record DecodedImage(int width, int height, int[] pixels) {}
+    
+    public DecodedImage decodeJpeg(String filePath) {
+        if (!available || !hasTurboJpeg()) {
+            return null;
+        }
+        
+        try {
+            NativeLibrary.DecodedImage result = nativeLib.decodeJpegFile(filePath);
+            if (result == null) {
+                return null;
+            }
+            return new DecodedImage(result.width(), result.height(), result.pixels());
+        } catch (Exception e) {
+            System.err.println("TurboJPEG decode failed: " + e.getMessage());
+            return null;
+        }
     }
 }

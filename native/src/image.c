@@ -78,6 +78,44 @@ AICHAT_EXPORT int sample_pixels(
     return sample_size;
 }
 
+AICHAT_EXPORT int sample_pixels_from_image(
+    const uint32_t* image_pixels,
+    int total_pixels,
+    ColorPoint3f* output,
+    int sample_size,
+    uint64_t seed
+) {
+    if (total_pixels <= sample_size) {
+        // Small image - extract all pixels
+        extract_pixels(image_pixels, total_pixels, output);
+        return total_pixels;
+    }
+    
+    XorShift64 rng;
+    xorshift64_init(&rng, seed);
+    
+    // Fill reservoir with first sample_size pixels
+    for (int i = 0; i < sample_size; i++) {
+        uint32_t pixel = image_pixels[i];
+        output[i].c1 = (float)((pixel >> 16) & 0xFF);
+        output[i].c2 = (float)((pixel >> 8) & 0xFF);
+        output[i].c3 = (float)(pixel & 0xFF);
+    }
+    
+    // Reservoir sampling for remaining pixels
+    for (int i = sample_size; i < total_pixels; i++) {
+        int j = xorshift64_int(&rng, i + 1);
+        if (j < sample_size) {
+            uint32_t pixel = image_pixels[i];
+            output[j].c1 = (float)((pixel >> 16) & 0xFF);
+            output[j].c2 = (float)((pixel >> 8) & 0xFF);
+            output[j].c3 = (float)(pixel & 0xFF);
+        }
+    }
+    
+    return sample_size;
+}
+
 AICHAT_EXPORT void resynthesize_image(
     const uint32_t* image_pixels,
     int width,
@@ -89,41 +127,52 @@ AICHAT_EXPORT void resynthesize_image(
 ) {
     int n = width * height;
     
-    if (palette_size <= 64) {
-        uint8_t* lut = (uint8_t*)malloc(32 * 32 * 32);
+    if (palette_size <= 256) {
+        const int LUT_SIZE = 64 * 64 * 64;
+        const float LUT_SCALE = 255.0f / 63.0f;
         
-        #pragma omp parallel for collapse(3) if(palette_size > 8)
-        for (int r = 0; r < 32; r++) {
-            for (int g = 0; g < 32; g++) {
-                for (int b = 0; b < 32; b++) {
-                    ColorPoint3f p = { r * 8.0f + 4.0f, g * 8.0f + 4.0f, b * 8.0f + 4.0f };
-                    lut[(r << 10) | (g << 5) | b] = (uint8_t)find_nearest_perceptual(&p, target_palette, palette_size);
+        uint8_t* lut = (uint8_t*)malloc(LUT_SIZE);
+        
+        #pragma omp parallel for collapse(3)
+        for (int r = 0; r < 64; r++) {
+            for (int g = 0; g < 64; g++) {
+                for (int b = 0; b < 64; b++) {
+                    ColorPoint3f p = { 
+                        r * LUT_SCALE, 
+                        g * LUT_SCALE, 
+                        b * LUT_SCALE 
+                    };
+                    lut[(r << 12) | (g << 6) | b] = (uint8_t)find_nearest_perceptual(&p, target_palette, palette_size);
                 }
             }
         }
         
-        #pragma omp parallel for if(n > 10000)
+        #pragma omp parallel for schedule(static, 65536)
         for (int i = 0; i < n; i++) {
             uint32_t pixel = image_pixels[i];
             int pr = (pixel >> 16) & 0xFF;
             int pg = (pixel >> 8) & 0xFF;
             int pb = pixel & 0xFF;
             
-            int idx = lut[((pr >> 3) << 10) | ((pg >> 3) << 5) | (pb >> 3)];
+            int idx = lut[((pr >> 2) << 12) | ((pg >> 2) << 6) | (pb >> 2)];
             
             const ColorPoint3f* target_center = &target_palette[idx];
             const ColorPoint3f* source_center = &source_palette[idx];
             
-            int r = (int)fminf(255.0f, fmaxf(0.0f, source_center->c1 + (pr - target_center->c1) + 0.5f));
-            int g = (int)fminf(255.0f, fmaxf(0.0f, source_center->c2 + (pg - target_center->c2) + 0.5f));
-            int b = (int)fminf(255.0f, fmaxf(0.0f, source_center->c3 + (pb - target_center->c3) + 0.5f));
+            int r = (int)(source_center->c1 + (pr - target_center->c1) + 0.5f);
+            int g = (int)(source_center->c2 + (pg - target_center->c2) + 0.5f);
+            int b = (int)(source_center->c3 + (pb - target_center->c3) + 0.5f);
+            
+            r = r < 0 ? 0 : (r > 255 ? 255 : r);
+            g = g < 0 ? 0 : (g > 255 ? 255 : g);
+            b = b < 0 ? 0 : (b > 255 ? 255 : b);
             
             output_pixels[i] = (uint32_t)((r << 16) | (g << 8) | b);
         }
         
         free(lut);
     } else {
-        #pragma omp parallel for if(n > 10000)
+        #pragma omp parallel for schedule(static, 65536)
         for (int i = 0; i < n; i++) {
             uint32_t pixel = image_pixels[i];
             ColorPoint3f point = {
@@ -140,9 +189,13 @@ AICHAT_EXPORT void resynthesize_image(
             float dc2 = point.c2 - target_center->c2;
             float dc3 = point.c3 - target_center->c3;
             
-            int r = (int)fminf(255.0f, fmaxf(0.0f, source_center->c1 + dc1 + 0.5f));
-            int g = (int)fminf(255.0f, fmaxf(0.0f, source_center->c2 + dc2 + 0.5f));
-            int b = (int)fminf(255.0f, fmaxf(0.0f, source_center->c3 + dc3 + 0.5f));
+            int r = (int)(source_center->c1 + dc1 + 0.5f);
+            int g = (int)(source_center->c2 + dc2 + 0.5f);
+            int b = (int)(source_center->c3 + dc3 + 0.5f);
+            
+            r = r < 0 ? 0 : (r > 255 ? 255 : r);
+            g = g < 0 ? 0 : (g > 255 ? 255 : g);
+            b = b < 0 ? 0 : (b > 255 ? 255 : b);
             
             output_pixels[i] = (uint32_t)((r << 16) | (g << 8) | b);
         }
