@@ -348,21 +348,54 @@ public class MainController {
         
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Result Image");
-        fileChooser.getExtensionFilters().add(
-            new FileChooser.ExtensionFilter("PNG Image", "*.png")
+        
+        // JPEG is much faster for large images
+        fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("JPEG Image (fast)", "*.jpg", "*.jpeg"),
+            new FileChooser.ExtensionFilter("PNG Image (lossless)", "*.png")
         );
-        fileChooser.setInitialFileName("result.png");
+        fileChooser.setInitialFileName("result.jpg");
         
         File file = fileChooser.showSaveDialog(resultStage);
         
         if (file != null) {
-            try {
-                String path = file.getAbsolutePath();
-                if (!path.toLowerCase().endsWith(".png")) {
-                    file = new File(path + ".png");
+            String path = file.getAbsolutePath().toLowerCase();
+            boolean isJpeg = path.endsWith(".jpg") || path.endsWith(".jpeg");
+            
+            // Add extension if missing
+            if (!path.endsWith(".jpg") && !path.endsWith(".jpeg") && !path.endsWith(".png")) {
+                FileChooser.ExtensionFilter selectedFilter = fileChooser.getSelectedExtensionFilter();
+                if (selectedFilter != null && selectedFilter.getDescription().contains("JPEG")) {
+                    file = new File(file.getAbsolutePath() + ".jpg");
+                    isJpeg = true;
+                } else {
+                    file = new File(file.getAbsolutePath() + ".png");
+                    isJpeg = false;
                 }
-                ImageIO.write(resultImage, "PNG", file);
-                statusLabel.setText("Image saved: " + file.getName());
+            }
+            
+            try {
+                long start = System.currentTimeMillis();
+                
+                if (isJpeg) {
+                    // Try fast TurboJPEG first
+                    NativeAccelerator nativeAccel = NativeAccelerator.getInstance();
+                    if (nativeAccel.hasTurboJpeg()) {
+                        if (nativeAccel.saveJpeg(resultImage, 90, file.getAbsolutePath())) {
+                            long elapsed = System.currentTimeMillis() - start;
+                            statusLabel.setText(String.format("Image saved: %s (%dms, TurboJPEG)", 
+                                file.getName(), elapsed));
+                            return;
+                        }
+                    }
+                    // Fallback to ImageIO for JPEG
+                    ImageIO.write(resultImage, "JPEG", file);
+                } else {
+                    ImageIO.write(resultImage, "PNG", file);
+                }
+                
+                long elapsed = System.currentTimeMillis() - start;
+                statusLabel.setText(String.format("Image saved: %s (%dms)", file.getName(), elapsed));
             } catch (IOException e) {
                 showAlert("Save Error", "Failed to save image: " + e.getMessage());
             }

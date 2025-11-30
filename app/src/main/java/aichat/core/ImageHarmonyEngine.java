@@ -87,14 +87,30 @@ public class ImageHarmonyEngine {
         int height = targetImage.getHeight();
         long totalPixels = (long) width * height;
         
+        int[] pixels = new int[width * height];
+        targetImage.getRGB(0, 0, width, height, pixels, 0, width);
+        
+        // Try GPU first for large images (>1MP) - much faster
+        if (totalPixels > 1_000_000 && nativeAccelerator.hasOpenCL()) {
+            int[] result = nativeAccelerator.resynthesizeImageGPU(
+                pixels, width, height,
+                targetPalette,
+                mappedSource
+            );
+            
+            if (result != null) {
+                BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                output.setRGB(0, 0, width, height, result, 0, width);
+                return output;
+            }
+            // Fall through to CPU if GPU failed
+        }
+        
         if (nativeAccelerator.isAvailable()) {
             // Use tiled processing for very large images to limit memory
             if (totalPixels > MAX_TILE_PIXELS) {
                 return resynthesizeTiled(targetImage, mappedSource, targetPalette);
             }
-            
-            int[] pixels = new int[width * height];
-            targetImage.getRGB(0, 0, width, height, pixels, 0, width);
             
             int[] result = nativeAccelerator.resynthesizeImage(
                 pixels, width, height,

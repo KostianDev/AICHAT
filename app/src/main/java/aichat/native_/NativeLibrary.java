@@ -27,6 +27,15 @@ public final class NativeLibrary {
     private final MethodHandle sample_pixels_from_image;
     private final MethodHandle decode_jpeg_file_turbojpeg;
     private final MethodHandle turbojpeg_free;
+    private final MethodHandle turbojpeg_encode_to_file;
+    
+    // OpenCL GPU acceleration
+    private final MethodHandle aichat_has_opencl;
+    private final MethodHandle opencl_init;
+    private final MethodHandle opencl_cleanup;
+    private final MethodHandle opencl_get_device_name;
+    private final MethodHandle opencl_resynthesize_image;
+    private final MethodHandle opencl_resynthesize_streaming;
     
     public static final StructLayout COLOR_POINT_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.JAVA_FLOAT.withName("c1"),
@@ -171,6 +180,54 @@ public final class NativeLibrary {
             
             this.turbojpeg_free = lookupFunction("turbojpeg_free",
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+            
+            this.turbojpeg_encode_to_file = lookupFunction("turbojpeg_encode_to_file",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS
+                ));
+            
+            // OpenCL GPU acceleration functions
+            this.aichat_has_opencl = lookupFunction("aichat_has_opencl",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+            
+            this.opencl_init = lookupFunction("opencl_init",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+            
+            this.opencl_cleanup = lookupFunction("opencl_cleanup",
+                FunctionDescriptor.ofVoid());
+            
+            this.opencl_get_device_name = lookupFunction("opencl_get_device_name",
+                FunctionDescriptor.of(ValueLayout.ADDRESS));
+            
+            this.opencl_resynthesize_image = lookupFunction("opencl_resynthesize_image",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,  // image_pixels
+                    ValueLayout.JAVA_INT,  // width
+                    ValueLayout.JAVA_INT,  // height
+                    ValueLayout.ADDRESS,  // target_palette
+                    ValueLayout.ADDRESS,  // source_palette
+                    ValueLayout.JAVA_INT,  // palette_size
+                    ValueLayout.ADDRESS   // output_pixels
+                ));
+            
+            this.opencl_resynthesize_streaming = lookupFunction("opencl_resynthesize_streaming",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,  // image_pixels
+                    ValueLayout.JAVA_INT,  // width
+                    ValueLayout.JAVA_INT,  // height
+                    ValueLayout.ADDRESS,  // target_palette
+                    ValueLayout.ADDRESS,  // source_palette
+                    ValueLayout.JAVA_INT,  // palette_size
+                    ValueLayout.ADDRESS,  // output_pixels
+                    ValueLayout.JAVA_INT   // tile_height
+                ));
         } else {
             this.kmeans_cluster = null;
             this.assign_points_batch = null;
@@ -186,6 +243,13 @@ public final class NativeLibrary {
             this.sample_pixels_from_image = null;
             this.decode_jpeg_file_turbojpeg = null;
             this.turbojpeg_free = null;
+            this.turbojpeg_encode_to_file = null;
+            this.aichat_has_opencl = null;
+            this.opencl_init = null;
+            this.opencl_cleanup = null;
+            this.opencl_get_device_name = null;
+            this.opencl_resynthesize_image = null;
+            this.opencl_resynthesize_streaming = null;
         }
     }
     
@@ -591,5 +655,171 @@ public final class NativeLibrary {
     
     public boolean hasTurboJpeg() {
         return decode_jpeg_file_turbojpeg != null;
+    }
+    
+    /**
+     * Encode and save image as JPEG using TurboJPEG.
+     * @param pixels ARGB pixel array
+     * @param width image width
+     * @param height image height
+     * @param quality JPEG quality (1-100, recommended 85-95)
+     * @param filePath output file path
+     * @return true if successful
+     */
+    public boolean encodeJpegToFile(int[] pixels, int width, int height, int quality, String filePath) {
+        if (turbojpeg_encode_to_file == null) {
+            return false;
+        }
+        
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment pixelsNative = arena.allocate(ValueLayout.JAVA_INT, pixels.length);
+            pixelsNative.copyFrom(MemorySegment.ofArray(pixels));
+            
+            MemorySegment pathNative = arena.allocateFrom(filePath);
+            
+            int result = (int) turbojpeg_encode_to_file.invokeExact(
+                pixelsNative, width, height, quality, pathNative
+            );
+            
+            return result == 0;
+        } catch (Throwable t) {
+            System.err.println("TurboJPEG encode failed: " + t.getMessage());
+            return false;
+        }
+    }
+    
+    // ==================== OpenCL GPU Acceleration ====================
+    
+    /**
+     * Check if OpenCL is available on this system.
+     */
+    public boolean hasOpenCL() {
+        if (aichat_has_opencl == null) return false;
+        try {
+            return ((int) aichat_has_opencl.invokeExact()) != 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+    
+    /**
+     * Initialize OpenCL context. Called automatically on first use.
+     */
+    public boolean initOpenCL() {
+        if (opencl_init == null) return false;
+        try {
+            return ((int) opencl_init.invokeExact()) == 0;
+        } catch (Throwable t) {
+            System.err.println("OpenCL init failed: " + t.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Cleanup OpenCL resources.
+     */
+    public void cleanupOpenCL() {
+        if (opencl_cleanup == null) return;
+        try {
+            opencl_cleanup.invokeExact();
+        } catch (Throwable ignored) {}
+    }
+    
+    /**
+     * Get OpenCL device name.
+     */
+    public String getOpenCLDeviceName() {
+        if (opencl_get_device_name == null) return "N/A";
+        try {
+            MemorySegment ptr = (MemorySegment) opencl_get_device_name.invokeExact();
+            return ptr.reinterpret(256).getString(0);
+        } catch (Throwable t) {
+            return "Error: " + t.getMessage();
+        }
+    }
+    
+    /**
+     * GPU-accelerated image resynthesis using OpenCL.
+     * @return result pixels, or null if failed
+     */
+    public int[] resynthesizeImageGPU(Arena arena, int[] imagePixels, int width, int height,
+                                       float[] targetPalette, float[] sourcePalette) {
+        if (opencl_resynthesize_image == null) {
+            return null;
+        }
+        
+        int paletteSize = sourcePalette.length / 3;
+        int n = width * height;
+        
+        MemorySegment imageNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        MemorySegment targetPaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, targetPalette.length);
+        MemorySegment sourcePaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, sourcePalette.length);
+        MemorySegment outputNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        
+        imageNative.copyFrom(MemorySegment.ofArray(imagePixels));
+        targetPaletteNative.copyFrom(MemorySegment.ofArray(targetPalette));
+        sourcePaletteNative.copyFrom(MemorySegment.ofArray(sourcePalette));
+        
+        try {
+            int result = (int) opencl_resynthesize_image.invokeExact(
+                imageNative, width, height,
+                targetPaletteNative, sourcePaletteNative, paletteSize, outputNative
+            );
+            
+            if (result != 0) {
+                return null;
+            }
+            
+            int[] output = new int[n];
+            MemorySegment.ofArray(output).copyFrom(outputNative);
+            return output;
+        } catch (Throwable t) {
+            System.err.println("OpenCL resynthesis failed: " + t.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * GPU-accelerated streaming resynthesis for very large images.
+     * Uses double-buffering to overlap GPU compute with CPU I/O.
+     * @param tileHeight Height of each processing tile (0 = auto)
+     */
+    public int[] resynthesizeImageGPUStreaming(Arena arena, int[] imagePixels, int width, int height,
+                                                float[] targetPalette, float[] sourcePalette, 
+                                                int tileHeight) {
+        if (opencl_resynthesize_streaming == null) {
+            return null;
+        }
+        
+        int paletteSize = sourcePalette.length / 3;
+        int n = width * height;
+        
+        MemorySegment imageNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        MemorySegment targetPaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, targetPalette.length);
+        MemorySegment sourcePaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, sourcePalette.length);
+        MemorySegment outputNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        
+        imageNative.copyFrom(MemorySegment.ofArray(imagePixels));
+        targetPaletteNative.copyFrom(MemorySegment.ofArray(targetPalette));
+        sourcePaletteNative.copyFrom(MemorySegment.ofArray(sourcePalette));
+        
+        try {
+            int result = (int) opencl_resynthesize_streaming.invokeExact(
+                imageNative, width, height,
+                targetPaletteNative, sourcePaletteNative, paletteSize, outputNative,
+                tileHeight
+            );
+            
+            if (result != 0) {
+                return null;
+            }
+            
+            int[] output = new int[n];
+            MemorySegment.ofArray(output).copyFrom(outputNative);
+            return output;
+        } catch (Throwable t) {
+            System.err.println("OpenCL streaming resynthesis failed: " + t.getMessage());
+            return null;
+        }
     }
 }

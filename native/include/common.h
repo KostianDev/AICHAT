@@ -51,6 +51,7 @@ typedef struct {
 
 AICHAT_EXPORT const char* aichat_native_version(void);
 AICHAT_EXPORT int aichat_has_simd(void);
+AICHAT_EXPORT int aichat_has_opencl(void);
 
 #ifdef __cplusplus
 }

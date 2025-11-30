@@ -103,18 +103,15 @@ AICHAT_EXPORT int turbojpeg_decode_and_sample(
         return -1;
     }
     
-    // Reservoir sampling
     XorShift64 rng;
     xorshift64_init(&rng, seed);
     
-    // Fill reservoir
     for (int i = 0; i < sample_size; i++) {
         output[i].c1 = (float)pixels[i * 3];
         output[i].c2 = (float)pixels[i * 3 + 1];
         output[i].c3 = (float)pixels[i * 3 + 2];
     }
     
-    // Sample remaining
     for (int i = sample_size; i < total_pixels; i++) {
         int j = xorshift64_int(&rng, i + 1);
         if (j < sample_size) {
@@ -220,9 +217,108 @@ AICHAT_EXPORT int decode_jpeg_file_turbojpeg(
     return 0;
 }
 
+static __thread tjhandle tj_compress_handle = NULL;
+
+static tjhandle get_tj_compress_handle(void) {
+    if (tj_compress_handle == NULL) {
+        tj_compress_handle = tjInitCompress();
+    }
+    return tj_compress_handle;
+}
+
+AICHAT_EXPORT int turbojpeg_encode(
+    const uint32_t* pixels,
+    int width,
+    int height,
+    int quality,
+    unsigned char** jpeg_data,
+    unsigned long* jpeg_size
+) {
+    tjhandle handle = get_tj_compress_handle();
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    size_t num_pixels = (size_t)width * height;
+    unsigned char* rgb = (unsigned char*)malloc(num_pixels * 3);
+    if (!rgb) {
+        return -1;
+    }
+    
+    // Convert ARGB to RGB in parallel
+    #pragma omp parallel for schedule(static, 65536) if(num_pixels > 100000)
+    for (size_t i = 0; i < num_pixels; i++) {
+        uint32_t pixel = pixels[i];
+        rgb[i * 3]     = (unsigned char)((pixel >> 16) & 0xFF);
+        rgb[i * 3 + 1] = (unsigned char)((pixel >> 8) & 0xFF);
+        rgb[i * 3 + 2] = (unsigned char)(pixel & 0xFF);
+    }
+    
+    *jpeg_data = NULL;
+    *jpeg_size = 0;
+    
+    int result = tjCompress2(
+        handle,
+        rgb,
+        width,
+        0,
+        height,
+        TJPF_RGB,
+        jpeg_data,
+        jpeg_size,
+        TJSAMP_420,
+        quality,
+        TJFLAG_FASTDCT
+    );
+    
+    free(rgb);
+    
+    if (result != 0) {
+        fprintf(stderr, "TurboJPEG encode failed: %s\n", tjGetErrorStr2(handle));
+        if (*jpeg_data) {
+            tjFree(*jpeg_data);
+            *jpeg_data = NULL;
+        }
+        return -1;
+    }
+    
+    return 0;
+}
+
+AICHAT_EXPORT int turbojpeg_encode_to_file(
+    const uint32_t* pixels,
+    int width,
+    int height,
+    int quality,
+    const char* path
+) {
+    unsigned char* jpeg_data = NULL;
+    unsigned long jpeg_size = 0;
+    
+    if (turbojpeg_encode(pixels, width, height, quality, &jpeg_data, &jpeg_size) != 0) {
+        return -1;
+    }
+    
+    FILE* file = fopen(path, "wb");
+    if (!file) {
+        tjFree(jpeg_data);
+        return -1;
+    }
+    
+    size_t written = fwrite(jpeg_data, 1, jpeg_size, file);
+    fclose(file);
+    tjFree(jpeg_data);
+    
+    return (written == jpeg_size) ? 0 : -1;
+}
+
 AICHAT_EXPORT void turbojpeg_cleanup(void) {
     if (tj_handle != NULL) {
         tjDestroy(tj_handle);
         tj_handle = NULL;
+    }
+    if (tj_compress_handle != NULL) {
+        tjDestroy(tj_compress_handle);
+        tj_compress_handle = NULL;
     }
 }

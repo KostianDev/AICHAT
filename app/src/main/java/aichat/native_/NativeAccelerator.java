@@ -220,4 +220,123 @@ public final class NativeAccelerator {
             return null;
         }
     }
+    
+    /**
+     * Save image as JPEG using TurboJPEG (much faster than ImageIO).
+     * @param pixels ARGB pixel array
+     * @param width image width
+     * @param height image height
+     * @param quality JPEG quality (1-100, recommended 90)
+     * @param filePath output file path
+     * @return true if successful
+     */
+    public boolean saveJpeg(int[] pixels, int width, int height, int quality, String filePath) {
+        if (!available || !hasTurboJpeg()) {
+            return false;
+        }
+        
+        try {
+            return nativeLib.encodeJpegToFile(pixels, width, height, quality, filePath);
+        } catch (Exception e) {
+            System.err.println("TurboJPEG encode failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Save BufferedImage as JPEG using TurboJPEG.
+     */
+    public boolean saveJpeg(java.awt.image.BufferedImage image, int quality, String filePath) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int[] pixels = new int[width * height];
+        image.getRGB(0, 0, width, height, pixels, 0, width);
+        return saveJpeg(pixels, width, height, quality, filePath);
+    }
+    
+    // ==================== OpenCL GPU Acceleration ====================
+    
+    private volatile Boolean openclAvailable = null;
+    private volatile Boolean openclInitialized = null;
+    
+    /**
+     * Check if OpenCL GPU acceleration is available.
+     */
+    public boolean hasOpenCL() {
+        if (openclAvailable == null) {
+            openclAvailable = available && nativeLib.hasOpenCL();
+        }
+        return openclAvailable;
+    }
+    
+    /**
+     * Initialize OpenCL. Called automatically on first GPU use.
+     */
+    public boolean initOpenCL() {
+        if (!hasOpenCL()) return false;
+        if (openclInitialized == null) {
+            openclInitialized = nativeLib.initOpenCL();
+            if (openclInitialized) {
+                System.out.println("OpenCL GPU acceleration enabled: " + getOpenCLDeviceName());
+            }
+        }
+        return openclInitialized;
+    }
+    
+    /**
+     * Get OpenCL GPU device name.
+     */
+    public String getOpenCLDeviceName() {
+        if (!hasOpenCL()) return "N/A";
+        return nativeLib.getOpenCLDeviceName();
+    }
+    
+    /**
+     * GPU-accelerated image resynthesis.
+     * Automatically chooses between regular and streaming mode based on image size.
+     * 
+     * @param pixels Input image pixels (ARGB)
+     * @param width Image width
+     * @param height Image height  
+     * @param targetPalette Target palette for color matching
+     * @param sourcePalette Source palette for color replacement
+     * @return Resynthesized pixels, or null if GPU processing failed
+     */
+    public int[] resynthesizeImageGPU(int[] pixels, int width, int height,
+                                       ColorPalette targetPalette, ColorPalette sourcePalette) {
+        if (!initOpenCL()) {
+            return null;
+        }
+        
+        try (Arena arena = Arena.ofConfined()) {
+            float[] target = colorPaletteToFloatArray(targetPalette);
+            float[] source = colorPaletteToFloatArray(sourcePalette);
+            
+            long imageSize = (long) width * height * 4;
+            
+            // Use streaming for large images (>64MB)
+            if (imageSize > 64 * 1024 * 1024) {
+                return nativeLib.resynthesizeImageGPUStreaming(
+                    arena, pixels, width, height, target, source, 0
+                );
+            } else {
+                return nativeLib.resynthesizeImageGPU(
+                    arena, pixels, width, height, target, source
+                );
+            }
+        } catch (Exception e) {
+            System.err.println("GPU resynthesis failed: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Cleanup OpenCL resources. Call when shutting down.
+     */
+    public void cleanupOpenCL() {
+        if (hasOpenCL() && openclInitialized != null && openclInitialized) {
+            nativeLib.cleanupOpenCL();
+            openclInitialized = false;
+        }
+    }
 }

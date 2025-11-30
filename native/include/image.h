@@ -68,6 +68,24 @@ AICHAT_EXPORT int turbojpeg_available(void);
 AICHAT_EXPORT void turbojpeg_free(void* ptr);
 AICHAT_EXPORT void turbojpeg_cleanup(void);
 
+// Fast JPEG encoding using libturbojpeg
+AICHAT_EXPORT int turbojpeg_encode(
+    const uint32_t* pixels,
+    int width,
+    int height,
+    int quality,
+    unsigned char** jpeg_data,
+    unsigned long* jpeg_size
+);
+
+AICHAT_EXPORT int turbojpeg_encode_to_file(
+    const uint32_t* pixels,
+    int width,
+    int height,
+    int quality,
+    const char* path
+);
+
 #ifdef __cplusplus
 }
 #endif
