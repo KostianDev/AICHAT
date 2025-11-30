@@ -10,5 +10,3 @@ app/src/main/resources/native/
 app/src/test/resources/golden/
 native/deps/
 app/bin/
-app/src/jmh/
-app/src/test/

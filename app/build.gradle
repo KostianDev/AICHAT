@@ -411,3 +411,91 @@ tasks.register('allDist') {
         file("${buildDir}/distributions").listFiles()?.each { println "  ${it.name}" }
     }
 }
+
+// ==================== Comprehensive Test Suite ====================
+
+tasks.register('allTests') {
+    description = 'Run all tests: unit tests, PBT, visual regression, JMH benchmarks, and Pitest mutation testing'
+    group = 'verification'
+    
+    doFirst {
+        println '''
+╔══════════════════════════════════════════════════════════════════════╗
+║                    AICHAT Comprehensive Test Suite                  ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Phase 1: Unit Tests + Property-Based Tests (JUnit 5 + jqwik)       ║
+║  Phase 2: JMH Benchmarks (performance validation)                    ║
+║  Phase 3: Pitest Mutation Testing (code quality)                    ║
+╚══════════════════════════════════════════════════════════════════════╝
+'''
+    }
+}
+
+// Phase 1: All unit and property-based tests
+tasks.register('testPhase1') {
+    description = 'Phase 1: Run all unit tests and property-based tests'
+    group = 'verification'
+    dependsOn 'test'
+    
+    doFirst {
+        println "\n═══ Phase 1: Unit Tests + PBT ═══"
+    }
+    doLast {
+        println "✓ Phase 1 completed: Unit tests and PBT passed"
+    }
+}
+
+// Phase 2: JMH benchmarks (quick mode for CI)
+tasks.register('testPhase2') {
+    description = 'Phase 2: Run JMH benchmarks (quick mode)'
+    group = 'verification'
+    dependsOn 'testPhase1'
+    
+    doFirst {
+        println "\n═══ Phase 2: JMH Benchmarks ═══"
+    }
+    
+    finalizedBy 'jmh'
+}
+
+// Phase 3: Pitest mutation testing
+tasks.register('testPhase3') {
+    description = 'Phase 3: Run Pitest mutation testing'
+    group = 'verification'
+    dependsOn 'testPhase1'
+    
+    doFirst {
+        println "\n═══ Phase 3: Pitest Mutation Testing ═══"
+    }
+    
+    finalizedBy 'pitest'
+}
+
+// Configure allTests to run all phases
+allTests {
+    dependsOn 'testPhase1', 'testPhase2', 'testPhase3'
+    
+    doLast {
+        println '''
+╔══════════════════════════════════════════════════════════════════════╗
+║                         Test Suite Complete                          ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Reports:                                                            ║
+║    • Unit Tests:  build/reports/tests/test/index.html               ║
+║    • JMH:         build/results/jmh/results.json                    ║
+║    • Pitest:      build/reports/pitest/index.html                   ║
+╚══════════════════════════════════════════════════════════════════════╝
+'''
+    }
+}
+
+// Quick test (unit tests only, no benchmarks or mutation)
+tasks.register('quickTest') {
+    description = 'Quick test: only unit tests and PBT (skip JMH and Pitest)'
+    group = 'verification'
+    dependsOn 'test'
+    
+    doLast {
+        println "\n✓ Quick test completed (use 'allTests' for full suite)"
+    }
+}
