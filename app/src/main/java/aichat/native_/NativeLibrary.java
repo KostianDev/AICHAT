@@ -9,14 +9,11 @@ public final class NativeLibrary {
     
     private static final NativeLibrary INSTANCE = new NativeLibrary();
     private static final boolean AVAILABLE;
-    private static final String LOAD_ERROR;
     
     private final SymbolLookup library;
     private final Linker linker;
     
     private final MethodHandle kmeans_cluster;
-    private final MethodHandle kmeans_init_plusplus;
-    private final MethodHandle kmeans_update_centroids;
     private final MethodHandle assign_points_batch;
     private final MethodHandle rgb_to_lab_batch;
     private final MethodHandle lab_to_rgb_batch;
@@ -25,9 +22,8 @@ public final class NativeLibrary {
     private final MethodHandle sample_pixels;
     private final MethodHandle aichat_native_version;
     private final MethodHandle aichat_has_simd;
-    private final MethodHandle dbscan_cluster;
-    private final MethodHandle dbscan_calculate_eps;
-    private final MethodHandle dbscan_calculate_centroids;
+    private final MethodHandle hybrid_cluster;
+    private final MethodHandle hybrid_calculate_dbscan_eps;
     
     public static final StructLayout COLOR_POINT_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.JAVA_FLOAT.withName("c1"),
@@ -37,7 +33,6 @@ public final class NativeLibrary {
     
     static {
         boolean available = false;
-        String error = null;
         
         try {
             NativeLibrary lib = INSTANCE;
@@ -45,11 +40,10 @@ public final class NativeLibrary {
                 available = true;
             }
         } catch (Throwable t) {
-            error = t.getMessage();
+            // Ignore
         }
         
         AVAILABLE = available;
-        LOAD_ERROR = error;
     }
     
     private NativeLibrary() {
@@ -66,26 +60,6 @@ public final class NativeLibrary {
                     ValueLayout.JAVA_INT,
                     ValueLayout.JAVA_FLOAT,
                     ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_LONG
-                ));
-            
-            this.kmeans_init_plusplus = lookupFunction("kmeans_init_plusplus",
-                FunctionDescriptor.ofVoid(
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_LONG
-                ));
-            
-            this.kmeans_update_centroids = lookupFunction("kmeans_update_centroids",
-                FunctionDescriptor.of(
-                    ValueLayout.JAVA_FLOAT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
                     ValueLayout.ADDRESS,
                     ValueLayout.JAVA_LONG
                 ));
@@ -148,17 +122,22 @@ public final class NativeLibrary {
             this.aichat_has_simd = lookupFunction("aichat_has_simd",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT));
             
-            this.dbscan_cluster = lookupFunction("dbscan_cluster",
+            this.hybrid_cluster = lookupFunction("hybrid_cluster",
                 FunctionDescriptor.of(
                     ValueLayout.JAVA_INT,
                     ValueLayout.ADDRESS,
                     ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
                     ValueLayout.JAVA_FLOAT,
                     ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_FLOAT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_LONG
                 ));
             
-            this.dbscan_calculate_eps = lookupFunction("dbscan_calculate_eps",
+            this.hybrid_calculate_dbscan_eps = lookupFunction("hybrid_calculate_dbscan_eps",
                 FunctionDescriptor.of(
                     ValueLayout.JAVA_FLOAT,
                     ValueLayout.ADDRESS,
@@ -167,19 +146,8 @@ public final class NativeLibrary {
                     ValueLayout.JAVA_INT,
                     ValueLayout.JAVA_LONG
                 ));
-            
-            this.dbscan_calculate_centroids = lookupFunction("dbscan_calculate_centroids",
-                FunctionDescriptor.ofVoid(
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS
-                ));
         } else {
             this.kmeans_cluster = null;
-            this.kmeans_init_plusplus = null;
-            this.kmeans_update_centroids = null;
             this.assign_points_batch = null;
             this.rgb_to_lab_batch = null;
             this.lab_to_rgb_batch = null;
@@ -188,9 +156,8 @@ public final class NativeLibrary {
             this.sample_pixels = null;
             this.aichat_native_version = null;
             this.aichat_has_simd = null;
-            this.dbscan_cluster = null;
-            this.dbscan_calculate_eps = null;
-            this.dbscan_calculate_centroids = null;
+            this.hybrid_cluster = null;
+            this.hybrid_calculate_dbscan_eps = null;
         }
     }
     
@@ -260,10 +227,6 @@ public final class NativeLibrary {
     
     public static boolean isAvailable() {
         return AVAILABLE;
-    }
-    
-    public static String getLoadError() {
-        return LOAD_ERROR;
     }
     
     public String getVersion() {
@@ -455,49 +418,42 @@ public final class NativeLibrary {
     
     public record DbscanResult(int numClusters, int[] labels, float[] centroids) {}
     
-    public DbscanResult dbscanCluster(Arena arena, float[] points, float eps, int minPts) {
-        if (dbscan_cluster == null) {
+    public float[] hybridCluster(Arena arena, float[] points, int k, int blockSize, 
+                                  float dbscanEps, int dbscanMinPts, 
+                                  int kmeansMaxIter, float kmeansThreshold, long seed) {
+        if (hybrid_cluster == null) {
             throw new UnsupportedOperationException("Native library not loaded");
         }
         
         int n = points.length / 3;
         
         MemorySegment pointsNative = arena.allocate(ValueLayout.JAVA_FLOAT, points.length);
-        MemorySegment labelsNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        MemorySegment centroidsNative = arena.allocate(COLOR_POINT_LAYOUT, k);
         
         pointsNative.copyFrom(MemorySegment.ofArray(points));
         
         try {
-            int numClusters = (int) dbscan_cluster.invokeExact(
-                pointsNative, n, eps, minPts, labelsNative
+            int iterations = (int) hybrid_cluster.invokeExact(
+                pointsNative, n, k, blockSize, dbscanEps, dbscanMinPts,
+                kmeansMaxIter, kmeansThreshold, centroidsNative, seed
             );
             
-            int[] labels = new int[n];
-            MemorySegment.ofArray(labels).copyFrom(labelsNative);
-            
-            float[] centroids = new float[numClusters * 3];
-            if (numClusters > 0) {
-                MemorySegment centroidsNative = arena.allocate(COLOR_POINT_LAYOUT, numClusters);
-                dbscan_calculate_centroids.invokeExact(
-                    pointsNative, n, labelsNative, numClusters, centroidsNative
-                );
-                
-                for (int i = 0; i < numClusters; i++) {
-                    long offset = i * COLOR_POINT_LAYOUT.byteSize();
-                    centroids[i * 3] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset);
-                    centroids[i * 3 + 1] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset + 4);
-                    centroids[i * 3 + 2] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset + 8);
-                }
+            float[] result = new float[k * 3];
+            for (int i = 0; i < k; i++) {
+                long offset = i * COLOR_POINT_LAYOUT.byteSize();
+                result[i * 3] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset);
+                result[i * 3 + 1] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset + 4);
+                result[i * 3 + 2] = centroidsNative.get(ValueLayout.JAVA_FLOAT, offset + 8);
             }
             
-            return new DbscanResult(numClusters, labels, centroids);
+            return result;
         } catch (Throwable t) {
-            throw new RuntimeException("DBSCAN native call failed", t);
+            throw new RuntimeException("Hybrid cluster native call failed", t);
         }
     }
     
-    public float dbscanCalculateEps(Arena arena, float[] points, int minPts, int sampleSize, long seed) {
-        if (dbscan_calculate_eps == null) {
+    public float hybridCalculateEps(Arena arena, float[] points, int blockSize, int minPts, long seed) {
+        if (hybrid_calculate_dbscan_eps == null) {
             throw new UnsupportedOperationException("Native library not loaded");
         }
         
@@ -507,11 +463,11 @@ public final class NativeLibrary {
         pointsNative.copyFrom(MemorySegment.ofArray(points));
         
         try {
-            return (float) dbscan_calculate_eps.invokeExact(
-                pointsNative, n, minPts, sampleSize, seed
+            return (float) hybrid_calculate_dbscan_eps.invokeExact(
+                pointsNative, n, blockSize, minPts, seed
             );
         } catch (Throwable t) {
-            throw new RuntimeException("DBSCAN calculate eps failed", t);
+            throw new RuntimeException("Hybrid calculate eps failed", t);
         }
     }
 }

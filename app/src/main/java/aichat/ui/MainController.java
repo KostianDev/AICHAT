@@ -1,7 +1,6 @@
 package aichat.ui;
 
 import aichat.core.ImageHarmonyEngine;
-import aichat.core.ImageHarmonyEngine.Algorithm;
 import aichat.core.ImageHarmonyEngine.ColorModel;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
@@ -39,7 +38,6 @@ public class MainController {
     
     @FXML private SplitPane mainSplitPane;
     
-    @FXML private ComboBox<Algorithm> algorithmCombo;
     @FXML private ComboBox<ColorModel> colorModelCombo;
     @FXML private Spinner<Integer> kSpinner;
     
@@ -65,14 +63,11 @@ public class MainController {
     
     @FXML
     public void initialize() {
-        algorithmCombo.getItems().addAll(Algorithm.values());
-        algorithmCombo.setValue(Algorithm.KMEANS);
-        
         colorModelCombo.getItems().addAll(ColorModel.values());
         colorModelCombo.setValue(ColorModel.RGB);
         
         SpinnerValueFactory<Integer> kFactory = 
-            new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 32, 5);
+            new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 512, 8);
         kSpinner.setValueFactory(kFactory);
         kSpinner.setEditable(true);
         
@@ -86,10 +81,10 @@ public class MainController {
             if (!isFocused) {
                 try {
                     int value = Integer.parseInt(kSpinner.getEditor().getText());
-                    value = Math.max(2, Math.min(32, value));
+                    value = Math.max(2, Math.min(512, value));
                     kSpinner.getValueFactory().setValue(value);
                 } catch (NumberFormatException e) {
-                    kSpinner.getValueFactory().setValue(5);
+                    kSpinner.getValueFactory().setValue(8);
                 }
             }
         });
@@ -146,7 +141,6 @@ public class MainController {
             return;
         }
         
-        Algorithm algorithm = algorithmCombo.getValue();
         ColorModel colorModel = colorModelCombo.getValue();
         int k = kSpinner.getValue();
         
@@ -158,7 +152,7 @@ public class MainController {
             
             @Override
             protected Void call() {
-                ImageHarmonyEngine engine = new ImageHarmonyEngine(algorithm, colorModel);
+                ImageHarmonyEngine engine = new ImageHarmonyEngine(colorModel);
                 
                 if (sourceImage != null) {
                     srcPal = engine.analyze(sourceImage, k);
@@ -200,20 +194,17 @@ public class MainController {
             return;
         }
         
-        Algorithm algorithm = algorithmCombo.getValue();
         ColorModel colorModel = colorModelCombo.getValue();
         
         setProcessing(true, "Resynthesizing image...");
         
-        // Capture palettes for the task
         final ColorPalette srcPal = sourcePalette;
         final ColorPalette tgtPal = targetPalette;
         
         Task<BufferedImage> resynthTask = new Task<>() {
             @Override
             protected BufferedImage call() {
-                ImageHarmonyEngine engine = new ImageHarmonyEngine(algorithm, colorModel);
-                // Apply source palette colors to target image
+                ImageHarmonyEngine engine = new ImageHarmonyEngine(colorModel);
                 return engine.resynthesize(targetImage, srcPal, tgtPal);
             }
             
@@ -350,10 +341,8 @@ public class MainController {
         
         String url = file.toURI().toString();
         
-        // Load scaled preview for instant display (max 800px, smooth scaling)
         Image preview = new Image(url, 800, 800, true, true, true);
         
-        // Set preview immediately when available
         preview.progressProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal.doubleValue() >= 1.0 && !preview.isError()) {
                 if (isSource) {
@@ -369,7 +358,6 @@ public class MainController {
             }
         });
         
-        // Load full resolution in background for display
         Image fullImage = new Image(url, true);
         fullImage.progressProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal.doubleValue() >= 1.0 && !fullImage.isError()) {
@@ -379,7 +367,6 @@ public class MainController {
                     targetImageView.setImage(fullImage);
                 }
                 
-                // Load BufferedImage for processing
                 loadBufferedImageAsync(file, isSource);
                 
                 statusLabel.setText("Loaded: " + file.getName() + 

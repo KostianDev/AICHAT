@@ -137,35 +137,26 @@ public final class NativeAccelerator {
     
     public record DbscanResult(int numClusters, int[] labels, List<ColorPoint> centroids) {}
     
-    public DbscanResult dbscanCluster(List<ColorPoint> points, double eps, int minPts) {
+    public List<ColorPoint> hybridCluster(List<ColorPoint> points, int k, 
+                                           int blockSize, int minPts, long seed) {
         if (!available || points.isEmpty()) {
             return null;
         }
         
         try (Arena arena = Arena.ofConfined()) {
             float[] flatPoints = colorPointsToFloatArray(points);
-            NativeLibrary.DbscanResult result = nativeLib.dbscanCluster(
-                arena, flatPoints, (float) eps, minPts);
             
-            List<ColorPoint> centroids = floatArrayToColorPoints(result.centroids());
-            return new DbscanResult(result.numClusters(), result.labels(), centroids);
+            float eps = nativeLib.hybridCalculateEps(arena, flatPoints, blockSize, minPts, seed);
+            
+            float[] result = nativeLib.hybridCluster(
+                arena, flatPoints, k, blockSize, eps, minPts,
+                100, 0.5f, seed
+            );
+            
+            return floatArrayToColorPoints(result);
         } catch (Exception e) {
-            System.err.println("Native DBSCAN failed: " + e.getMessage());
+            System.err.println("Native Hybrid clustering failed: " + e.getMessage());
             return null;
-        }
-    }
-    
-    public double dbscanCalculateEps(List<ColorPoint> points, int minPts, int sampleSize, long seed) {
-        if (!available || points.isEmpty()) {
-            return -1;
-        }
-        
-        try (Arena arena = Arena.ofConfined()) {
-            float[] flatPoints = colorPointsToFloatArray(points);
-            return nativeLib.dbscanCalculateEps(arena, flatPoints, minPts, sampleSize, seed);
-        } catch (Exception e) {
-            System.err.println("Native DBSCAN eps calculation failed: " + e.getMessage());
-            return -1;
         }
     }
     

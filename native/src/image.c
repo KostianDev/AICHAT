@@ -13,9 +13,9 @@ AICHAT_EXPORT void extract_pixels(
     #pragma omp parallel for if(n > 10000)
     for (int i = 0; i < n; i++) {
         uint32_t pixel = image_pixels[i];
-        output[i].c1 = (float)((pixel >> 16) & 0xFF);  // R
-        output[i].c2 = (float)((pixel >> 8) & 0xFF);   // G
-        output[i].c3 = (float)(pixel & 0xFF);          // B
+        output[i].c1 = (float)((pixel >> 16) & 0xFF);
+        output[i].c2 = (float)((pixel >> 8) & 0xFF);
+        output[i].c3 = (float)(pixel & 0xFF);
     }
 }
 
@@ -34,10 +34,8 @@ AICHAT_EXPORT int sample_pixels(
     XorShift64 rng;
     xorshift64_init(&rng, seed);
     
-    // Copy first sample_size elements
     memcpy(output, input, sample_size * sizeof(ColorPoint3f));
     
-    // Reservoir replacement
     for (int i = sample_size; i < input_size; i++) {
         int j = xorshift64_int(&rng, i + 1);
         if (j < sample_size) {

@@ -1,8 +1,7 @@
 package aichat.core;
 
 import aichat.algorithm.ClusteringStrategy;
-import aichat.algorithm.KMeansClusterer;
-import aichat.algorithm.DbscanClusterer;
+import aichat.algorithm.HybridClusterer;
 import aichat.color.ColorSpaceConverter;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
@@ -14,58 +13,50 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Main engine for color palette extraction and image resynthesis.
+ * Uses hybrid DBSCAN + K-Means algorithm for optimal performance.
+ */
 public class ImageHarmonyEngine {
-    
-    public enum Algorithm {
-        KMEANS, DBSCAN
-    }
     
     public enum ColorModel {
         RGB, CIELAB
     }
     
-    private static final int MAX_PIXELS_KMEANS = 50000;
-    private static final int MAX_PIXELS_DBSCAN = 5000;
+    private static final int MAX_PIXELS = 10000;  // Reduced for speed
     private static final long DEFAULT_SEED = 42L;
     
-    private final Algorithm algorithm;
     private final ColorModel colorModel;
     private final ClusteringStrategy clusteringStrategy;
     private final NativeAccelerator nativeAccelerator;
     private final long seed;
     
-    public ImageHarmonyEngine(Algorithm algorithm, ColorModel colorModel) {
-        this(algorithm, colorModel, DEFAULT_SEED);
+    public ImageHarmonyEngine() {
+        this(ColorModel.RGB, DEFAULT_SEED);
     }
     
-    public ImageHarmonyEngine(Algorithm algorithm, ColorModel colorModel, long seed) {
-        this.algorithm = algorithm;
+    public ImageHarmonyEngine(ColorModel colorModel) {
+        this(colorModel, DEFAULT_SEED);
+    }
+    
+    public ImageHarmonyEngine(ColorModel colorModel, long seed) {
         this.colorModel = colorModel;
         this.seed = seed;
-        this.clusteringStrategy = createStrategy(algorithm, seed);
+        this.clusteringStrategy = new HybridClusterer(seed);
         this.nativeAccelerator = NativeAccelerator.getInstance();
     }
     
-    private ClusteringStrategy createStrategy(Algorithm algorithm, long seed) {
-        return switch (algorithm) {
-            case KMEANS -> new KMeansClusterer(seed);
-            case DBSCAN -> new DbscanClusterer();
-        };
-    }
-    
     public ColorPalette analyze(BufferedImage image, int k) {
-        int maxPixels = (algorithm == Algorithm.DBSCAN) ? MAX_PIXELS_DBSCAN : MAX_PIXELS_KMEANS;
-        
         List<ColorPoint> pixels = extractPixels(image);
         List<ColorPoint> sampledPixels;
         
         if (nativeAccelerator.isAvailable()) {
-            sampledPixels = nativeAccelerator.samplePixels(pixels, maxPixels, seed);
+            sampledPixels = nativeAccelerator.samplePixels(pixels, MAX_PIXELS, seed);
             if (sampledPixels == null) {
-                sampledPixels = samplePixels(pixels, maxPixels);
+                sampledPixels = samplePixels(pixels, MAX_PIXELS);
             }
         } else {
-            sampledPixels = samplePixels(pixels, maxPixels);
+            sampledPixels = samplePixels(pixels, MAX_PIXELS);
         }
         
         List<ColorPoint> workingPixels = convertColorSpace(sampledPixels, true);
@@ -205,11 +196,11 @@ public class ImageHarmonyEngine {
         }
     }
     
-    public Algorithm getAlgorithm() {
-        return algorithm;
-    }
-    
     public ColorModel getColorModel() {
         return colorModel;
+    }
+    
+    public String getAlgorithmName() {
+        return clusteringStrategy.getName();
     }
 }

@@ -8,7 +8,6 @@ extern "C" {
 #endif
 
 AICHAT_EXPORT float distance_squared(const ColorPoint3f* a, const ColorPoint3f* b);
-AICHAT_EXPORT float distance(const ColorPoint3f* a, const ColorPoint3f* b);
 
 int find_nearest_centroid(
     const ColorPoint3f* point,

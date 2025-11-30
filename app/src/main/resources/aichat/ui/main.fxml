@@ -37,9 +37,6 @@
                 <Button fx:id="loadTargetButton" text="Load Target" onAction="#handleLoadTarget" styleClass="toolbar-button"/>
                 <Separator orientation="VERTICAL"/>
                 
-                <Label text="Algorithm:" styleClass="toolbar-label"/>
-                <ComboBox fx:id="algorithmCombo" prefWidth="150" styleClass="toolbar-combo"/>
-                
                 <Label text="Color Model:" styleClass="toolbar-label"/>
                 <ComboBox fx:id="colorModelCombo" prefWidth="150" styleClass="toolbar-combo"/>
                 
