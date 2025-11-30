@@ -83,7 +83,7 @@ public class ColorPalette {
         
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < m; j++) {
-                cost[i][j] = this.colors.get(i).distanceSquaredTo(target.colors.get(j));
+                cost[i][j] = perceptualDistance(this.colors.get(i), target.colors.get(j));
                 maxCost = Math.max(maxCost, cost[i][j]);
             }
         }
@@ -105,6 +105,23 @@ public class ColorPalette {
         }
         
         return mapping;
+    }
+    
+    private double perceptualDistance(ColorPoint a, ColorPoint b) {
+        double dr = a.c1() - b.c1();
+        double dg = a.c2() - b.c2();
+        double db = a.c3() - b.c3();
+        double avgR = (a.c1() + b.c1()) * 0.5;
+        
+        double wr = avgR < 128 ? 2.0 : 3.0;
+        double wg = 4.0;
+        double wb = avgR < 128 ? 3.0 : 2.0;
+        
+        double lumA = 0.299 * a.c1() + 0.587 * a.c2() + 0.114 * a.c3();
+        double lumB = 0.299 * b.c1() + 0.587 * b.c2() + 0.114 * b.c3();
+        double lumDiff = (lumA - lumB) * (lumA - lumB) * 0.5;
+        
+        return wr * dr * dr + wg * dg * dg + wb * db * db + lumDiff;
     }
     
     private int[] hungarianAlgorithm(double[][] cost, int n) {
