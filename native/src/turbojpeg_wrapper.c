@@ -133,6 +133,60 @@ AICHAT_EXPORT void turbojpeg_free(void* ptr) {
     free(ptr);
 }
 
+// Decode JPEG from memory buffer, returns ARGB pixels
+AICHAT_EXPORT int turbojpeg_decode_buffer(
+    const unsigned char* jpeg_data,
+    unsigned long jpeg_size,
+    int* out_width,
+    int* out_height,
+    uint32_t** out_pixels
+) {
+    tjhandle handle = get_tj_handle();
+    if (handle == NULL) {
+        return -1;
+    }
+    
+    int w, h, subsamp, colorspace;
+    if (tjDecompressHeader3(handle, jpeg_data, jpeg_size, &w, &h, &subsamp, &colorspace) != 0) {
+        return -1;
+    }
+    
+    *out_width = w;
+    *out_height = h;
+    
+    size_t num_pixels = (size_t)w * h;
+    *out_pixels = (uint32_t*)malloc(num_pixels * sizeof(uint32_t));
+    if (!*out_pixels) {
+        return -1;
+    }
+    
+    unsigned char* bgrx = (unsigned char*)malloc(num_pixels * 4);
+    if (!bgrx) {
+        free(*out_pixels);
+        *out_pixels = NULL;
+        return -1;
+    }
+    
+    if (tjDecompress2(handle, jpeg_data, jpeg_size, bgrx, w, 0, h, TJPF_BGRX, TJFLAG_FASTDCT) != 0) {
+        free(bgrx);
+        free(*out_pixels);
+        *out_pixels = NULL;
+        return -1;
+    }
+    
+    // Convert BGRX to ARGB
+    uint32_t* pixels = *out_pixels;
+    for (size_t i = 0; i < num_pixels; i++) {
+        unsigned char b = bgrx[i * 4];
+        unsigned char g = bgrx[i * 4 + 1];
+        unsigned char r = bgrx[i * 4 + 2];
+        pixels[i] = 0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+    }
+    
+    free(bgrx);
+    return 0;
+}
+
 AICHAT_EXPORT int decode_jpeg_file_turbojpeg(
     const char* path,
     int* out_width,

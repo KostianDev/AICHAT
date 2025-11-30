@@ -204,13 +204,23 @@ public final class NativeAccelerator {
     
     public record DecodedImage(int width, int height, int[] pixels) {}
     
+    /**
+     * Decode JPEG file using TurboJPEG.
+     * Reads file in Java (supports Unicode paths) then decodes natively.
+     */
     public DecodedImage decodeJpeg(String filePath) {
         if (!available || !hasTurboJpeg()) {
             return null;
         }
         
         try {
-            NativeLibrary.DecodedImage result = nativeLib.decodeJpegFile(filePath);
+            // Read file in Java (supports Unicode paths on Windows)
+            byte[] jpegData = java.nio.file.Files.readAllBytes(java.nio.file.Path.of(filePath));
+            NativeLibrary.DecodedImage result = nativeLib.decodeJpegBuffer(jpegData);
+            if (result == null) {
+                // Fallback to file-based decode (works on Linux/macOS)
+                result = nativeLib.decodeJpegFile(filePath);
+            }
             if (result == null) {
                 return null;
             }

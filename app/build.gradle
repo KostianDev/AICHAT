@@ -48,7 +48,7 @@ application {
 
 tasks.register('buildNative', Exec) {
     workingDir "${project.rootDir}/native"
-    commandLine 'make', 'all'
+    commandLine 'make', 'clean', 'all'
     ignoreExitValue = true
     doFirst { println "Building native library for current platform..." }
 }
@@ -173,7 +173,7 @@ tasks.register('jlinkRuntime', Exec) {
 }
 
 tasks.register('fullDist', Sync) {
-    description = 'Create full distribution with bundled JRE'
+    description = 'Create full distribution with bundled JRE (Linux only)'
     group = 'distribution'
     dependsOn 'buildNative', 'jar', 'jlinkRuntime'
     
@@ -182,18 +182,18 @@ tasks.register('fullDist', Sync) {
     from("${buildDir}/jlink-runtime") { into 'jre' }
     from(configurations.runtimeClasspath.files.findAll { !it.name.startsWith('javafx-') }) { into 'lib' }
     from(jar) { into 'lib' }
-    from("${projectDir}/src/main/resources/native") { into 'native' }
+    from("${projectDir}/src/main/resources/native/linux") { into 'native/linux' }
     from("${projectDir}/../scripts/README.md") { into '.' }
     
     doLast {
-        createBundledLauncher(file("${buildDir}/full-dist/aichat"))
+        createLinuxLauncher(file("${buildDir}/full-dist/aichat"))
         file("${buildDir}/full-dist/aichat/VERSION").text = 
-            "AICHAT ${project.version}\nBuild: ${new Date()}\nBundled JRE: Java 25\n"
-        println "Full distribution: ${buildDir}/full-dist/aichat"
+            "AICHAT ${project.version}\nBuild: ${new Date()}\nBundled JRE: Java 25 (Linux x64)\n"
+        println "Full distribution (Linux): ${buildDir}/full-dist/aichat"
     }
 }
 
-def createBundledLauncher(File distDir) {
+def createLinuxLauncher(File distDir) {
     def shScript = new File(distDir, 'aichat.sh')
     shScript.text = '''#!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -202,12 +202,13 @@ cd "$SCRIPT_DIR"
 JAVA="$SCRIPT_DIR/jre/bin/java"
 [ ! -f "$JAVA" ] && echo "Error: Bundled JRE not found" && exit 1
 
-OS="$(uname -s)"
-case "$OS" in
-    Linux*)  PLATFORM="linux";;
-    Darwin*) PLATFORM="macos";;
-    *)       echo "Unsupported OS: $OS"; exit 1;;
-esac
+# Fix permissions after ZIP extraction (ZIP doesn't preserve Unix permissions)
+if [ ! -x "$JAVA" ]; then
+    echo "Setting executable permissions for JRE..."
+    chmod +x "$SCRIPT_DIR"/jre/bin/* 2>/dev/null
+    chmod +x "$SCRIPT_DIR"/jre/lib/jexec 2>/dev/null
+    chmod +x "$SCRIPT_DIR"/jre/lib/jspawnhelper 2>/dev/null
+fi
 
 echo "AICHAT - Advanced Image Color Harmony Analysis"
 echo "================================================"
@@ -217,45 +218,168 @@ if [ -f /usr/lib/x86_64-linux-gnu/libMesaOpenCL.so ] || [ -f /usr/lib64/libMesaO
     lspci 2>/dev/null | grep -qi "Intel.*Graphics" && export RUSTICL_ENABLE="${RUSTICL_ENABLE:-iris}" && echo "Intel GPU detected"
 fi
 
-export LD_LIBRARY_PATH="$SCRIPT_DIR/native/$PLATFORM${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$SCRIPT_DIR/native/linux${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 CLASSPATH=""
 for jar in "$SCRIPT_DIR"/lib/*.jar; do
     [ -n "$CLASSPATH" ] && CLASSPATH="$CLASSPATH:$jar" || CLASSPATH="$jar"
 done
 
-exec "$JAVA" --enable-native-access=javafx.graphics,ALL-UNNAMED -Djava.library.path="$SCRIPT_DIR/native/$PLATFORM" -cp "$CLASSPATH" aichat.App "$@"
+exec "$JAVA" --enable-native-access=javafx.graphics,ALL-UNNAMED -Djava.library.path="$SCRIPT_DIR/native/linux" -cp "$CLASSPATH" aichat.App "$@"
 '''
     shScript.setExecutable(true, false)
+}
+
+// Windows portable distribution (requires user to install Java 25+)
+tasks.register('portableDistWindows', Sync) {
+    description = 'Create portable Windows distribution (requires Java 25+)'
+    group = 'distribution'
+    dependsOn 'jar'
     
+    into "${buildDir}/portable-windows/aichat"
+    
+    from(configurations.runtimeClasspath.files.findAll { !it.name.startsWith('javafx-') }) { into 'lib' }
+    from(jar) { into 'lib' }
+    from("${projectDir}/src/main/resources/native/windows") { into 'native/windows' }
+    from("${projectDir}/../scripts/README.md") { into '.' }
+    
+    doLast {
+        createWindowsLauncher(file("${buildDir}/portable-windows/aichat"))
+        file("${buildDir}/portable-windows/aichat/VERSION").text = 
+            "AICHAT ${project.version}\nBuild: ${new Date()}\nRequires: Java 25+ with JavaFX\n"
+        println "Portable distribution (Windows): ${buildDir}/portable-windows/aichat"
+    }
+}
+
+def createWindowsLauncher(File distDir) {
     def batScript = new File(distDir, 'aichat.bat')
     batScript.text = '''@echo off
 setlocal enabledelayedexpansion
-set SCRIPT_DIR=%~dp0
-cd /d "%SCRIPT_DIR%"
+cd /d "%~dp0"
+set SCRIPT_DIR=%CD%
 
-set JAVA=%SCRIPT_DIR%jre\\bin\\java.exe
-if not exist "%JAVA%" (echo Error: Bundled JRE not found & pause & exit /b 1)
+REM Try bundled JRE first, then JAVA_HOME, then PATH
+if exist "%SCRIPT_DIR%\\jre\\bin\\javaw.exe" (
+    set JAVA=%SCRIPT_DIR%\\jre\\bin\\javaw.exe
+) else if defined JAVA_HOME (
+    set JAVA=%JAVA_HOME%\\bin\\javaw.exe
+) else (
+    where javaw >nul 2>&1
+    if %ERRORLEVEL% equ 0 (
+        set JAVA=javaw
+    ) else (
+        echo Error: Java not found. Please install Java 25+ or set JAVA_HOME
+        pause
+        exit /b 1
+    )
+)
 
-echo AICHAT - Advanced Image Color Harmony Analysis
-echo ================================================
+set NATIVE_DIR=%SCRIPT_DIR%\\native\\windows
 
 set CLASSPATH=
-for %%j in ("%SCRIPT_DIR%lib\\*.jar") do (
+for %%j in ("%SCRIPT_DIR%\\lib\\*.jar") do (
     if defined CLASSPATH (set CLASSPATH=!CLASSPATH!;%%j) else (set CLASSPATH=%%j)
 )
 
-"%JAVA%" --enable-native-access=javafx.graphics,ALL-UNNAMED -Djava.library.path="%SCRIPT_DIR%native\\windows" -cp "%CLASSPATH%" aichat.App %*
-if %ERRORLEVEL% neq 0 pause
+start "" "%JAVA%" --enable-native-access=ALL-UNNAMED -Djava.library.path="%NATIVE_DIR%" -cp "%CLASSPATH%" aichat.App %*
 '''
 }
 
+// Download Windows JRE (Liberica JDK Full with JavaFX)
+tasks.register('downloadWindowsJre') {
+    description = 'Download Windows JRE with JavaFX for bundled distribution'
+    group = 'distribution'
+    
+    def jreDir = file("${buildDir}/windows-jre")
+    def jreZip = file("${buildDir}/liberica-jdk-windows.zip")
+    // Liberica JDK 25 Full (with JavaFX) for Windows x64
+    def jreUrl = 'https://github.com/bell-sw/Liberica/releases/download/25.0.1+11/bellsoft-jdk25.0.1+11-windows-amd64-full.zip'
+    
+    outputs.dir(jreDir)
+    
+    doLast {
+        if (!jreDir.exists() || jreDir.listFiles()?.length == 0) {
+            println "Downloading Windows JRE (~220MB)..."
+            if (!jreZip.exists()) {
+                ant.get(src: jreUrl, dest: jreZip, verbose: true)
+            }
+            println "Extracting Windows JRE..."
+            delete jreDir
+            copy {
+                from zipTree(jreZip)
+                into jreDir
+                eachFile { fcd ->
+                    // Remove top-level directory (jdk-25.0.1-full)
+                    def segments = fcd.relativePath.segments
+                    if (segments.length > 1) {
+                        fcd.relativePath = new RelativePath(!fcd.file.isDirectory(), segments[1..-1] as String[])
+                    } else {
+                        fcd.exclude()
+                    }
+                }
+                includeEmptyDirs = false
+            }
+            println "Windows JRE ready: ${jreDir}"
+        } else {
+            println "Windows JRE already exists: ${jreDir}"
+        }
+    }
+}
+
+// Full Windows distribution with bundled JRE
+tasks.register('fullDistWindows', Sync) {
+    description = 'Create full Windows distribution with bundled JRE'
+    group = 'distribution'
+    dependsOn 'jar', 'downloadWindowsJre'
+    
+    into "${buildDir}/full-dist-windows/aichat"
+    
+    from("${buildDir}/windows-jre") { into 'jre' }
+    from(configurations.runtimeClasspath.files.findAll { !it.name.startsWith('javafx-') }) { into 'lib' }
+    from(jar) { into 'lib' }
+    from("${projectDir}/src/main/resources/native/windows") { into 'native/windows' }
+    from("${projectDir}/../scripts/README.md") { into '.' }
+    
+    doLast {
+        createWindowsLauncher(file("${buildDir}/full-dist-windows/aichat"))
+        file("${buildDir}/full-dist-windows/aichat/VERSION").text = 
+            "AICHAT ${project.version}\nBuild: ${new Date()}\nBundled JRE: Liberica JDK 25 Full (Windows x64)\n"
+        println "Full distribution (Windows): ${buildDir}/full-dist-windows/aichat"
+    }
+}
+
+tasks.register('fullDistWindowsZip', Zip) {
+    description = 'Create full Windows distribution ZIP with bundled JRE'
+    group = 'distribution'
+    dependsOn 'fullDistWindows'
+    from "${buildDir}/full-dist-windows"
+    archiveFileName = "aichat-full-${project.version}-windows.zip"
+    destinationDirectory = file("${buildDir}/distributions")
+    doLast {
+        def size = archiveFile.get().asFile.length() / 1024 / 1024
+        println "Created: ${archiveFileName.get()} (${String.format('%.1f', size)} MB)"
+    }
+}
+
+tasks.register('portableDistWindowsZip', Zip) {
+    description = 'Create portable Windows ZIP (requires Java 25+)'
+    group = 'distribution'
+    dependsOn 'portableDistWindows'
+    from "${buildDir}/portable-windows"
+    archiveFileName = "aichat-portable-${project.version}-windows.zip"
+    destinationDirectory = file("${buildDir}/distributions")
+    doLast {
+        def size = archiveFile.get().asFile.length() / 1024 / 1024
+        println "Created: ${archiveFileName.get()} (${String.format('%.1f', size)} MB)"
+    }
+}
+
 tasks.register('fullDistZip', Zip) {
-    description = 'Create full distribution ZIP with bundled JRE'
+    description = 'Create full Linux distribution ZIP with bundled JRE'
     group = 'distribution'
     dependsOn 'fullDist'
     from "${buildDir}/full-dist"
-    archiveFileName = "aichat-full-${project.version}.zip"
+    archiveFileName = "aichat-full-${project.version}-linux.zip"
     destinationDirectory = file("${buildDir}/distributions")
     doLast {
         def size = archiveFile.get().asFile.length() / 1024 / 1024
@@ -264,15 +388,26 @@ tasks.register('fullDistZip', Zip) {
 }
 
 tasks.register('fullDistTarGz', Tar) {
-    description = 'Create full distribution tar.gz with bundled JRE'
+    description = 'Create full Linux distribution tar.gz with bundled JRE'
     group = 'distribution'
     dependsOn 'fullDist'
     from "${buildDir}/full-dist"
-    archiveFileName = "aichat-full-${project.version}.tar.gz"
+    archiveFileName = "aichat-full-${project.version}-linux.tar.gz"
     destinationDirectory = file("${buildDir}/distributions")
     compression = Compression.GZIP
     doLast {
         def size = archiveFile.get().asFile.length() / 1024 / 1024
         println "Created: ${archiveFileName.get()} (${String.format('%.1f', size)} MB)"
+    }
+}
+
+// Build all distributions
+tasks.register('allDist') {
+    description = 'Build all distribution archives'
+    group = 'distribution'
+    dependsOn 'fullDistZip', 'fullDistWindowsZip'
+    doLast {
+        println "\n=== All distributions created ==="
+        file("${buildDir}/distributions").listFiles()?.each { println "  ${it.name}" }
     }
 }

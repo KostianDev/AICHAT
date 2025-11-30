@@ -345,14 +345,21 @@ public class MainController {
         root.setBottom(buttonBar);
         root.setStyle("-fx-background-color: #1e1e1e;");
         
-        int windowWidth = image.getWidth() + 40;
-        int windowHeight = image.getHeight() + 100;
+        // Calculate window size within screen bounds
+        javafx.geometry.Rectangle2D screenBounds = javafx.stage.Screen.getPrimary().getVisualBounds();
+        int windowWidth = Math.min(image.getWidth() + 40, (int)(screenBounds.getWidth() * 0.9));
+        int windowHeight = Math.min(image.getHeight() + 100, (int)(screenBounds.getHeight() * 0.9));
         
         Scene scene = new Scene(root, windowWidth, windowHeight);
         
         resultStage.setScene(scene);
         resultStage.setMinWidth(400);
         resultStage.setMinHeight(300);
+        
+        // Center on screen
+        resultStage.setX((screenBounds.getWidth() - windowWidth) / 2);
+        resultStage.setY((screenBounds.getHeight() - windowHeight) / 2);
+        
         resultStage.show();
         resultStage.toFront();
         

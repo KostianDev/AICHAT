@@ -26,6 +26,7 @@ public final class NativeLibrary {
     private final MethodHandle hybrid_calculate_dbscan_eps;
     private final MethodHandle sample_pixels_from_image;
     private final MethodHandle decode_jpeg_file_turbojpeg;
+    private final MethodHandle turbojpeg_decode_buffer;
     private final MethodHandle turbojpeg_free;
     private final MethodHandle turbojpeg_encode_to_file;
     
@@ -178,6 +179,16 @@ public final class NativeLibrary {
                     ValueLayout.ADDRESS
                 ));
             
+            this.turbojpeg_decode_buffer = lookupFunction("turbojpeg_decode_buffer",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,  // jpeg_data
+                    ValueLayout.JAVA_LONG, // jpeg_size
+                    ValueLayout.ADDRESS,  // out_width
+                    ValueLayout.ADDRESS,  // out_height
+                    ValueLayout.ADDRESS   // out_pixels
+                ));
+            
             this.turbojpeg_free = lookupFunction("turbojpeg_free",
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
             
@@ -242,6 +253,7 @@ public final class NativeLibrary {
             this.hybrid_calculate_dbscan_eps = null;
             this.sample_pixels_from_image = null;
             this.decode_jpeg_file_turbojpeg = null;
+            this.turbojpeg_decode_buffer = null;
             this.turbojpeg_free = null;
             this.turbojpeg_encode_to_file = null;
             this.aichat_has_opencl = null;
@@ -272,6 +284,22 @@ public final class NativeLibrary {
             return null;
         }
         
+        // Try java.library.path first (set by launcher script)
+        String libraryPath = System.getProperty("java.library.path");
+        if (libraryPath != null) {
+            for (String dir : libraryPath.split(java.io.File.pathSeparator)) {
+                try {
+                    Path libPath = Path.of(dir, libName);
+                    if (libPath.toFile().exists()) {
+                        return SymbolLookup.libraryLookup(libPath, Arena.global());
+                    }
+                } catch (Exception e) {
+                    // Continue to next path
+                }
+            }
+        }
+        
+        // Try loading from resources (works when running from IDE)
         try {
             String resourcePath = "/native/" + platform + "/" + libName;
             var url = getClass().getResource(resourcePath);
@@ -283,12 +311,14 @@ public final class NativeLibrary {
             System.err.println("Failed to load from resources: " + e.getMessage());
         }
         
+        // Try default library lookup
         try {
             return SymbolLookup.libraryLookup(libName, Arena.global());
         } catch (Exception e) {
             System.err.println("Failed to load from library path: " + e.getMessage());
         }
         
+        // Try project directory (development mode)
         try {
             String projectDir = System.getProperty("user.dir");
             Path libPath = Path.of(projectDir, "native", "build", libName);
@@ -653,8 +683,65 @@ public final class NativeLibrary {
         }
     }
     
+    /**
+     * Decode JPEG from byte array (works with Unicode paths by reading in Java).
+     */
+    public DecodedImage decodeJpegBuffer(byte[] jpegData) {
+        if (turbojpeg_decode_buffer == null || turbojpeg_free == null) {
+            return null;
+        }
+        
+        MemorySegment nativePixels = null;
+        
+        try (Arena arena = Arena.ofConfined()) {
+            // Copy JPEG data to native memory
+            MemorySegment jpegNative = arena.allocate(jpegData.length);
+            jpegNative.copyFrom(MemorySegment.ofArray(jpegData));
+            
+            // Allocate output pointers
+            MemorySegment widthPtr = arena.allocate(ValueLayout.JAVA_INT);
+            MemorySegment heightPtr = arena.allocate(ValueLayout.JAVA_INT);
+            MemorySegment pixelsPtr = arena.allocate(ValueLayout.ADDRESS);
+            
+            int result = (int) turbojpeg_decode_buffer.invokeExact(
+                jpegNative, (long) jpegData.length, widthPtr, heightPtr, pixelsPtr
+            );
+            
+            if (result != 0) {
+                return null;
+            }
+            
+            int width = widthPtr.get(ValueLayout.JAVA_INT, 0);
+            int height = heightPtr.get(ValueLayout.JAVA_INT, 0);
+            nativePixels = pixelsPtr.get(ValueLayout.ADDRESS, 0);
+            
+            if (nativePixels.equals(MemorySegment.NULL)) {
+                return null;
+            }
+            
+            int numPixels = width * height;
+            MemorySegment pixels = nativePixels.reinterpret(numPixels * 4L);
+            
+            int[] pixelArray = new int[numPixels];
+            MemorySegment.ofArray(pixelArray).copyFrom(pixels);
+            
+            turbojpeg_free.invokeExact(nativePixels);
+            nativePixels = null;
+            
+            return new DecodedImage(width, height, pixelArray);
+        } catch (Throwable t) {
+            if (nativePixels != null && !nativePixels.equals(MemorySegment.NULL)) {
+                try {
+                    turbojpeg_free.invokeExact(nativePixels);
+                } catch (Throwable ignored) {}
+            }
+            System.err.println("TurboJPEG buffer decode failed: " + t.getMessage());
+            return null;
+        }
+    }
+    
     public boolean hasTurboJpeg() {
-        return decode_jpeg_file_turbojpeg != null;
+        return turbojpeg_decode_buffer != null || decode_jpeg_file_turbojpeg != null;
     }
     
     /**
