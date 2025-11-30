@@ -14,41 +14,31 @@ repositories {
     mavenCentral()
 }
 
-// Java 25 toolchain
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
-// JavaFX configuration
 javafx {
     version = "25"
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.swing']
 }
 
 dependencies {
-    // Guava utilities
     implementation libs.guava
     
-    // Unit Testing - JUnit 5
     testImplementation libs.junit.jupiter
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    
-    // Property-Based Testing - jqwik
     testImplementation 'net.jqwik:jqwik:1.9.3'
-    
-    // Image comparison for visual regression testing
     testImplementation 'com.github.romankh3:image-comparison:4.4.0'
     
-    // JMH for benchmarks
     jmh 'org.openjdk.jmh:jmh-core:1.37'
     jmh 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 application {
     mainClass = 'aichat.App'
-    // Enable native access for both JavaFX and Panama FFI
     applicationDefaultJvmArgs = [
         '--enable-native-access=javafx.graphics,ALL-UNNAMED',
         '-Djava.library.path=' + projectDir.absolutePath + '/src/main/resources/native/linux:' + 
@@ -56,36 +46,30 @@ application {
     ]
 }
 
-// Task to build native library before running
 tasks.register('buildNative', Exec) {
     workingDir "${project.rootDir}/native"
     commandLine 'make', 'all'
-    
-    // Don't fail if native build fails - Java fallback will be used
     ignoreExitValue = true
-    
-    doFirst {
-        println "Building native library..."
-    }
+    doFirst { println "Building native library for current platform..." }
 }
 
-// Make run task depend on native build
+tasks.register('buildNativeAll', Exec) {
+    workingDir "${project.rootDir}/native"
+    commandLine 'make', 'all-platforms'
+    ignoreExitValue = true
+    doFirst { println "Building native library for all platforms..." }
+}
+
 tasks.named('run') {
     dependsOn 'buildNative'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
-    
-    // Include jqwik property-based tests
     include '**/*Test.class'
     include '**/*Tests.class'
     include '**/*Properties.class'
-    
-    // Enable native access for tests
     jvmArgs '--enable-native-access=ALL-UNNAMED'
-    
-    // Show test output
     testLogging {
         events "passed", "skipped", "failed"
         showStandardStreams = true
@@ -93,9 +77,7 @@ tasks.named('test') {
     }
 }
 
-// Pitest mutation testing configuration
 pitest {
-    // Focus on well-tested core algorithmic code
     targetClasses = ['aichat.color.ColorSpaceConverter', 'aichat.model.*']
     targetTests = ['aichat.*']
     pitestVersion = '1.20.3'
@@ -106,14 +88,191 @@ pitest {
     coverageThreshold = 90
     failWhenNoMutations = false
     jvmArgs = ['--enable-native-access=ALL-UNNAMED']
-    // Exclude native-dependent code paths
     excludedClasses = ['aichat.native_.*']
 }
 
-// JMH benchmarks configuration
 jmh {
     iterations = 5
     warmupIterations = 3
     fork = 1
     resultFormat = 'JSON'
+}
+
+// ==================== Distribution Tasks ====================
+
+def currentOs = org.gradle.internal.os.OperatingSystem.current()
+def platform = currentOs.isLinux() ? 'linux' : (currentOs.isMacOsX() ? 'macos' : 'windows')
+
+tasks.register('portableDist', Sync) {
+    description = 'Create portable distribution (requires Java 25+)'
+    group = 'distribution'
+    dependsOn 'buildNative', 'jar'
+    
+    into "${buildDir}/portable/aichat"
+    
+    from(configurations.runtimeClasspath) { into 'lib' }
+    from(jar) { into 'lib' }
+    from("${projectDir}/src/main/resources/native") { into 'native' }
+    from("${projectDir}/../scripts") { into '.' }
+    
+    doLast {
+        file("${buildDir}/portable/aichat/VERSION").text = 
+            "AICHAT ${project.version}\nBuild: ${new Date()}\n"
+        file("${buildDir}/portable/aichat/aichat.sh").setExecutable(true, false)
+        println "Portable distribution: ${buildDir}/portable/aichat"
+    }
+}
+
+tasks.register('portableZip', Zip) {
+    description = 'Create portable ZIP (requires Java 25+)'
+    group = 'distribution'
+    dependsOn 'portableDist'
+    from "${buildDir}/portable"
+    archiveFileName = "aichat-portable-${project.version}.zip"
+    destinationDirectory = file("${buildDir}/distributions")
+}
+
+tasks.register('portableTarGz', Tar) {
+    description = 'Create portable tar.gz (requires Java 25+)'
+    group = 'distribution'
+    dependsOn 'portableDist'
+    from "${buildDir}/portable"
+    archiveFileName = "aichat-portable-${project.version}.tar.gz"
+    destinationDirectory = file("${buildDir}/distributions")
+    compression = Compression.GZIP
+}
+
+tasks.register('jlinkRuntime', Exec) {
+    description = 'Create minimal JRE with JavaFX using jlink'
+    group = 'distribution'
+    dependsOn 'jar'
+    
+    def jlinkOutput = "${buildDir}/jlink-runtime"
+    def javaHome = System.getProperty('java.home')
+    def jlink = "${javaHome}/bin/jlink"
+    def javafxJars = configurations.runtimeClasspath.files.findAll { 
+        it.name.startsWith('javafx-') && it.name.contains("-${platform}") 
+    }
+    def modulePath = javafxJars.collect { it.absolutePath }.join(File.pathSeparator)
+    
+    doFirst { delete jlinkOutput }
+    
+    commandLine jlink,
+        '--module-path', modulePath,
+        '--add-modules', 'java.base,java.desktop,java.logging,java.prefs,java.xml,jdk.unsupported,javafx.controls,javafx.fxml,javafx.swing',
+        '--output', jlinkOutput,
+        '--strip-debug',
+        '--compress', 'zip-6',
+        '--no-header-files',
+        '--no-man-pages'
+    
+    doLast {
+        def size = file(jlinkOutput).directorySize() / 1024 / 1024
+        println "Custom JRE: ${jlinkOutput} (${String.format('%.1f', size)} MB)"
+    }
+}
+
+tasks.register('fullDist', Sync) {
+    description = 'Create full distribution with bundled JRE'
+    group = 'distribution'
+    dependsOn 'buildNative', 'jar', 'jlinkRuntime'
+    
+    into "${buildDir}/full-dist/aichat"
+    
+    from("${buildDir}/jlink-runtime") { into 'jre' }
+    from(configurations.runtimeClasspath.files.findAll { !it.name.startsWith('javafx-') }) { into 'lib' }
+    from(jar) { into 'lib' }
+    from("${projectDir}/src/main/resources/native") { into 'native' }
+    from("${projectDir}/../scripts/README.md") { into '.' }
+    
+    doLast {
+        createBundledLauncher(file("${buildDir}/full-dist/aichat"))
+        file("${buildDir}/full-dist/aichat/VERSION").text = 
+            "AICHAT ${project.version}\nBuild: ${new Date()}\nBundled JRE: Java 25\n"
+        println "Full distribution: ${buildDir}/full-dist/aichat"
+    }
+}
+
+def createBundledLauncher(File distDir) {
+    def shScript = new File(distDir, 'aichat.sh')
+    shScript.text = '''#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+JAVA="$SCRIPT_DIR/jre/bin/java"
+[ ! -f "$JAVA" ] && echo "Error: Bundled JRE not found" && exit 1
+
+OS="$(uname -s)"
+case "$OS" in
+    Linux*)  PLATFORM="linux";;
+    Darwin*) PLATFORM="macos";;
+    *)       echo "Unsupported OS: $OS"; exit 1;;
+esac
+
+echo "AICHAT - Advanced Image Color Harmony Analysis"
+echo "================================================"
+
+if [ -f /usr/lib/x86_64-linux-gnu/libMesaOpenCL.so ] || [ -f /usr/lib64/libMesaOpenCL.so ]; then
+    lspci 2>/dev/null | grep -qi "AMD\\|Radeon" && export RUSTICL_ENABLE="${RUSTICL_ENABLE:-radeonsi}" && echo "AMD GPU detected"
+    lspci 2>/dev/null | grep -qi "Intel.*Graphics" && export RUSTICL_ENABLE="${RUSTICL_ENABLE:-iris}" && echo "Intel GPU detected"
+fi
+
+export LD_LIBRARY_PATH="$SCRIPT_DIR/native/$PLATFORM${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+CLASSPATH=""
+for jar in "$SCRIPT_DIR"/lib/*.jar; do
+    [ -n "$CLASSPATH" ] && CLASSPATH="$CLASSPATH:$jar" || CLASSPATH="$jar"
+done
+
+exec "$JAVA" --enable-native-access=javafx.graphics,ALL-UNNAMED -Djava.library.path="$SCRIPT_DIR/native/$PLATFORM" -cp "$CLASSPATH" aichat.App "$@"
+'''
+    shScript.setExecutable(true, false)
+    
+    def batScript = new File(distDir, 'aichat.bat')
+    batScript.text = '''@echo off
+setlocal enabledelayedexpansion
+set SCRIPT_DIR=%~dp0
+cd /d "%SCRIPT_DIR%"
+
+set JAVA=%SCRIPT_DIR%jre\\bin\\java.exe
+if not exist "%JAVA%" (echo Error: Bundled JRE not found & pause & exit /b 1)
+
+echo AICHAT - Advanced Image Color Harmony Analysis
+echo ================================================
+
+set CLASSPATH=
+for %%j in ("%SCRIPT_DIR%lib\\*.jar") do (
+    if defined CLASSPATH (set CLASSPATH=!CLASSPATH!;%%j) else (set CLASSPATH=%%j)
+)
+
+"%JAVA%" --enable-native-access=javafx.graphics,ALL-UNNAMED -Djava.library.path="%SCRIPT_DIR%native\\windows" -cp "%CLASSPATH%" aichat.App %*
+if %ERRORLEVEL% neq 0 pause
+'''
+}
+
+tasks.register('fullDistZip', Zip) {
+    description = 'Create full distribution ZIP with bundled JRE'
+    group = 'distribution'
+    dependsOn 'fullDist'
+    from "${buildDir}/full-dist"
+    archiveFileName = "aichat-full-${project.version}.zip"
+    destinationDirectory = file("${buildDir}/distributions")
+    doLast {
+        def size = archiveFile.get().asFile.length() / 1024 / 1024
+        println "Created: ${archiveFileName.get()} (${String.format('%.1f', size)} MB)"
+    }
+}
+
+tasks.register('fullDistTarGz', Tar) {
+    description = 'Create full distribution tar.gz with bundled JRE'
+    group = 'distribution'
+    dependsOn 'fullDist'
+    from "${buildDir}/full-dist"
+    archiveFileName = "aichat-full-${project.version}.tar.gz"
+    destinationDirectory = file("${buildDir}/distributions")
+    compression = Compression.GZIP
+    doLast {
+        def size = archiveFile.get().asFile.length() / 1024 / 1024
+        println "Created: ${archiveFileName.get()} (${String.format('%.1f', size)} MB)"
+    }
 }
