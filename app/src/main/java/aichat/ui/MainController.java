@@ -73,7 +73,8 @@ public class MainController {
     // Loading state tracking
     private volatile boolean sourceLoading = false;
     private volatile boolean targetLoading = false;
-    private volatile long sourceLoadId = 0;  // To track which load operation is current
+    private volatile boolean analyzing = false;
+    private volatile long sourceLoadId = 0;
     private volatile long targetLoadId = 0;
     
     private ColorPalette sourcePalette;
@@ -195,6 +196,11 @@ public class MainController {
             return;
         }
         
+        if (analyzing) {
+            showAlert("Please Wait", "Analysis is already in progress.");
+            return;
+        }
+        
         if (sourceImage == null && targetImage == null) {
             showAlert("No Image", "Please load at least one image to analyze.");
             return;
@@ -207,7 +213,12 @@ public class MainController {
     }
     
     private void runAnalysis(ColorModel colorModel, int k) {
+        analyzing = true;
         setProcessing(true, "Analyzing images...");
+        
+        // Capture image references at the start to avoid race conditions
+        final BufferedImage srcImg = sourceImage;
+        final BufferedImage tgtImg = targetImage;
         
         Task<Void> analyzeTask = new Task<>() {
             private ColorPalette srcPal;
@@ -217,27 +228,34 @@ public class MainController {
             protected Void call() {
                 ImageHarmonyEngine engine = new ImageHarmonyEngine(colorModel);
                 
-                if (sourceImage != null) {
-                    srcPal = engine.analyze(sourceImage, k);
+                if (srcImg != null) {
+                    srcPal = engine.analyze(srcImg, k);
                 }
-                if (targetImage != null) {
-                    tgtPal = engine.analyze(targetImage, k);
+                if (tgtImg != null) {
+                    tgtPal = engine.analyze(tgtImg, k);
                 }
                 return null;
             }
             
             @Override
             protected void succeeded() {
-                sourcePalette = srcPal;
-                targetPalette = tgtPal;
-                displayPalette(sourcePalettePane, sourcePalette);
-                displayPalette(targetPalettePane, targetPalette);
+                analyzing = false;
+                // Only update palettes if images haven't been replaced
+                if (srcImg == sourceImage) {
+                    sourcePalette = srcPal;
+                    displayPalette(sourcePalettePane, sourcePalette);
+                }
+                if (tgtImg == targetImage) {
+                    targetPalette = tgtPal;
+                    displayPalette(targetPalettePane, targetPalette);
+                }
                 setProcessing(false, "Analysis complete.");
                 updateButtonStates();
             }
             
             @Override
             protected void failed() {
+                analyzing = false;
                 setProcessing(false, "Analysis failed: " + getException().getMessage());
             }
         };
@@ -261,6 +279,8 @@ public class MainController {
         
         setProcessing(true, "Resynthesizing image...");
         
+        // Capture references to avoid race conditions
+        final BufferedImage tgtImg = targetImage;
         final ColorPalette srcPal = sourcePalette;
         final ColorPalette tgtPal = targetPalette;
         
@@ -268,7 +288,7 @@ public class MainController {
             @Override
             protected BufferedImage call() {
                 ImageHarmonyEngine engine = new ImageHarmonyEngine(colorModel);
-                return engine.resynthesize(targetImage, srcPal, tgtPal);
+                return engine.resynthesize(tgtImg, srcPal, tgtPal);
             }
             
             @Override
@@ -433,6 +453,9 @@ public class MainController {
     }
     
     private void loadImage(File file, boolean isSource) {
+        // Cancel any ongoing analysis when loading new image
+        analyzing = false;
+        
         // Mark as loading and invalidate current image
         if (isSource) {
             sourceLoading = true;
