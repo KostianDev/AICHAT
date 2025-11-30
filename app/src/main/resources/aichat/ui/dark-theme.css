@@ -412,3 +412,27 @@
     -fx-background-color: #2563eb;
     -fx-text-fill: white;
 }
+
+.swap-bar {
+    -fx-background-color: #252525;
+    -fx-border-color: #3c3c3c transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+.swap-button {
+    -fx-background-color: #3c3c3c;
+    -fx-text-fill: #e0e0e0;
+    -fx-background-radius: 6;
+    -fx-padding: 10 24 10 24;
+    -fx-font-size: 15px;
+    -fx-cursor: hand;
+}
+
+.swap-button:hover {
+    -fx-background-color: #4a9eff;
+    -fx-text-fill: white;
+}
+
+.swap-button:pressed {
+    -fx-background-color: #3b82f6;
+}

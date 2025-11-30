@@ -45,6 +45,7 @@ public class MainController {
     @FXML private Button loadTargetButton;
     @FXML private Button analyzeButton;
     @FXML private Button resynthesizeButton;
+    @FXML private Button swapButton;
     
     @FXML private FlowPane sourcePalettePane;
     @FXML private FlowPane targetPalettePane;
@@ -112,10 +113,6 @@ public class MainController {
             targetScrollPane.widthProperty().subtract(40));
         targetImageView.fitHeightProperty().bind(
             targetScrollPane.heightProperty().subtract(40));
-        
-        mainSplitPane.getDividers().get(0).positionProperty().addListener((obs, oldVal, newVal) -> {
-            mainSplitPane.setDividerPositions(0.5);
-        });
     }
     
     @FXML
@@ -132,6 +129,28 @@ public class MainController {
         if (file != null) {
             loadImage(file, false);
         }
+    }
+    
+    @FXML
+    private void handleSwap() {
+        BufferedImage tempImage = sourceImage;
+        sourceImage = targetImage;
+        targetImage = tempImage;
+        
+        ColorPalette tempPalette = sourcePalette;
+        sourcePalette = targetPalette;
+        targetPalette = tempPalette;
+        
+        Image srcFx = sourceImageView.getImage();
+        Image tgtFx = targetImageView.getImage();
+        sourceImageView.setImage(tgtFx);
+        targetImageView.setImage(srcFx);
+        
+        displayPalette(sourcePalettePane, sourcePalette);
+        displayPalette(targetPalettePane, targetPalette);
+        
+        updateButtonStates();
+        statusLabel.setText("Swapped source and target.");
     }
     
     @FXML
@@ -396,6 +415,7 @@ public class MainController {
                 } else {
                     targetImage = getValue();
                 }
+                updateButtonStates();
             }
         };
         new Thread(task).start();

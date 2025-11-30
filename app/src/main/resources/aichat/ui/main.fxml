@@ -51,49 +51,55 @@
     </top>
     
     <center>
-        <SplitPane fx:id="mainSplitPane" dividerPositions="0.5" orientation="HORIZONTAL" styleClass="main-split-pane">
-            <VBox spacing="12" styleClass="image-panel">
-                <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
-                <HBox spacing="12" alignment="CENTER_LEFT">
-                    <Label text="Source Image" styleClass="panel-title"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Load" onAction="#handleLoadSource" styleClass="small-button"/>
-                </HBox>
-                <ScrollPane fx:id="sourceScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
-                    <StackPane fx:id="sourceImageContainer" styleClass="image-container">
-                        <ImageView fx:id="sourceImageView" preserveRatio="true"/>
-                    </StackPane>
-                </ScrollPane>
-                <TitledPane text="Source Palette" expanded="true" collapsible="true" styleClass="palette-pane" maxHeight="160" minHeight="160">
-                    <ScrollPane fitToWidth="true" styleClass="palette-scroll">
-                        <FlowPane fx:id="sourcePalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
-                            <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
-                        </FlowPane>
+        <VBox>
+            <SplitPane fx:id="mainSplitPane" dividerPositions="0.5" orientation="HORIZONTAL" styleClass="main-split-pane" VBox.vgrow="ALWAYS">
+                <VBox spacing="12" styleClass="image-panel">
+                    <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
+                    <HBox spacing="12" alignment="CENTER_LEFT">
+                        <Label text="Source Image" styleClass="panel-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button text="Load" onAction="#handleLoadSource" styleClass="small-button"/>
+                    </HBox>
+                    <ScrollPane fx:id="sourceScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
+                        <StackPane fx:id="sourceImageContainer" styleClass="image-container">
+                            <ImageView fx:id="sourceImageView" preserveRatio="true"/>
+                        </StackPane>
                     </ScrollPane>
-                </TitledPane>
-            </VBox>
-            
-            <VBox spacing="12" styleClass="image-panel">
-                <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
-                <HBox spacing="12" alignment="CENTER_LEFT">
-                    <Label text="Target Image" styleClass="panel-title"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Load" onAction="#handleLoadTarget" styleClass="small-button"/>
-                </HBox>
-                <ScrollPane fx:id="targetScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
-                    <StackPane fx:id="targetImageContainer" styleClass="image-container">
-                        <ImageView fx:id="targetImageView" preserveRatio="true"/>
-                    </StackPane>
-                </ScrollPane>
-                <TitledPane text="Target Palette" expanded="true" collapsible="true" styleClass="palette-pane" maxHeight="160" minHeight="160">
-                    <ScrollPane fitToWidth="true" styleClass="palette-scroll">
-                        <FlowPane fx:id="targetPalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
-                            <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
-                        </FlowPane>
+                    <TitledPane text="Source Palette" expanded="true" collapsible="true" styleClass="palette-pane">
+                        <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
+                            <FlowPane fx:id="sourcePalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                                <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                            </FlowPane>
+                        </ScrollPane>
+                    </TitledPane>
+                </VBox>
+                
+                <VBox spacing="12" styleClass="image-panel">
+                    <padding><Insets top="16" bottom="16" left="16" right="16"/></padding>
+                    <HBox spacing="12" alignment="CENTER_LEFT">
+                        <Label text="Target Image" styleClass="panel-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button text="Load" onAction="#handleLoadTarget" styleClass="small-button"/>
+                    </HBox>
+                    <ScrollPane fx:id="targetScrollPane" VBox.vgrow="ALWAYS" styleClass="image-scroll" pannable="true">
+                        <StackPane fx:id="targetImageContainer" styleClass="image-container">
+                            <ImageView fx:id="targetImageView" preserveRatio="true"/>
+                        </StackPane>
                     </ScrollPane>
-                </TitledPane>
-            </VBox>
-        </SplitPane>
+                    <TitledPane text="Target Palette" expanded="true" collapsible="true" styleClass="palette-pane">
+                        <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
+                            <FlowPane fx:id="targetPalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                                <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                            </FlowPane>
+                        </ScrollPane>
+                    </TitledPane>
+                </VBox>
+            </SplitPane>
+            <HBox alignment="CENTER" styleClass="swap-bar">
+                <padding><Insets top="8" bottom="8"/></padding>
+                <Button fx:id="swapButton" text="⇄ Swap Source ↔ Target" onAction="#handleSwap" styleClass="swap-button"/>
+            </HBox>
+        </VBox>
     </center>
     
     <bottom>
