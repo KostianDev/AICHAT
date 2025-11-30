@@ -2,6 +2,8 @@ package aichat.ui;
 
 import aichat.core.ImageHarmonyEngine;
 import aichat.core.ImageHarmonyEngine.ColorModel;
+import aichat.export.PaletteExporter;
+import aichat.export.PaletteExporter.ExportFormat;
 import aichat.model.ColorPalette;
 import aichat.model.ColorPoint;
 
@@ -17,6 +19,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -47,6 +50,11 @@ public class MainController {
     @FXML private Button resynthesizeButton;
     @FXML private Button swapButton;
     
+    @FXML private Button exportSourceOptimalBtn;
+    @FXML private Button exportSourcePngBtn;
+    @FXML private Button exportTargetOptimalBtn;
+    @FXML private Button exportTargetPngBtn;
+    
     @FXML private FlowPane sourcePalettePane;
     @FXML private FlowPane targetPalettePane;
     
@@ -66,6 +74,10 @@ public class MainController {
     public void initialize() {
         colorModelCombo.getItems().addAll(ColorModel.values());
         colorModelCombo.setValue(ColorModel.RGB);
+        
+        colorModelCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            updateExportButtonLabels();
+        });
         
         SpinnerValueFactory<Integer> kFactory = 
             new SpinnerValueFactory.IntegerSpinnerValueFactory(2, 512, 8);
@@ -468,9 +480,75 @@ public class MainController {
         boolean hasSource = sourceImage != null;
         boolean hasTarget = targetImage != null;
         boolean hasPalettes = sourcePalette != null && targetPalette != null;
+        boolean hasSourcePalette = sourcePalette != null;
+        boolean hasTargetPalette = targetPalette != null;
         
         analyzeButton.setDisable(!hasSource && !hasTarget);
         resynthesizeButton.setDisable(!hasSource || !hasTarget || !hasPalettes);
+        
+        exportSourceOptimalBtn.setDisable(!hasSourcePalette);
+        exportSourcePngBtn.setDisable(!hasSourcePalette);
+        exportTargetOptimalBtn.setDisable(!hasTargetPalette);
+        exportTargetPngBtn.setDisable(!hasTargetPalette);
+        
+        updateExportButtonLabels();
+    }
+    
+    private void updateExportButtonLabels() {
+        ColorModel model = colorModelCombo.getValue();
+        String formatDesc = PaletteExporter.getOptimalFormatDescription(model);
+        String shortFormat = model == ColorModel.RGB ? "GPL" : "CSV";
+        
+        exportSourceOptimalBtn.setText(shortFormat);
+        exportTargetOptimalBtn.setText(shortFormat);
+        
+        exportSourceOptimalBtn.setTooltip(new Tooltip("Export as " + formatDesc));
+        exportTargetOptimalBtn.setTooltip(new Tooltip("Export as " + formatDesc));
+        exportSourcePngBtn.setTooltip(new Tooltip("Export as PNG image with color squares"));
+        exportTargetPngBtn.setTooltip(new Tooltip("Export as PNG image with color squares"));
+    }
+    
+    @FXML
+    private void handleExportSourceOptimal() {
+        exportPalette(sourcePalette, ExportFormat.OPTIMAL, "source");
+    }
+    
+    @FXML
+    private void handleExportSourcePng() {
+        exportPalette(sourcePalette, ExportFormat.PNG_IMAGE, "source");
+    }
+    
+    @FXML
+    private void handleExportTargetOptimal() {
+        exportPalette(targetPalette, ExportFormat.OPTIMAL, "target");
+    }
+    
+    @FXML
+    private void handleExportTargetPng() {
+        exportPalette(targetPalette, ExportFormat.PNG_IMAGE, "target");
+    }
+    
+    private void exportPalette(ColorPalette palette, ExportFormat format, String paletteName) {
+        if (palette == null) {
+            showAlert("No Palette", "Please analyze the " + paletteName + " image first.");
+            return;
+        }
+        
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select Export Directory");
+        
+        Stage stage = (Stage) loadSourceButton.getScene().getWindow();
+        File directory = chooser.showDialog(stage);
+        
+        if (directory != null) {
+            try {
+                ColorModel model = colorModelCombo.getValue();
+                File exportedFile = PaletteExporter.exportPalette(palette, model, format, directory);
+                statusLabel.setText("Exported: " + exportedFile.getName());
+            } catch (IOException e) {
+                showAlert("Export Error", "Failed to export palette: " + e.getMessage());
+            }
+        }
     }
     
     private void showAlert(String title, String content) {

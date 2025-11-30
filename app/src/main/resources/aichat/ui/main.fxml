@@ -66,11 +66,19 @@
                         </StackPane>
                     </ScrollPane>
                     <TitledPane text="Source Palette" expanded="true" collapsible="true" styleClass="palette-pane">
-                        <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
-                            <FlowPane fx:id="sourcePalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
-                                <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
-                            </FlowPane>
-                        </ScrollPane>
+                        <VBox spacing="8">
+                            <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
+                                <FlowPane fx:id="sourcePalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                                    <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                                </FlowPane>
+                            </ScrollPane>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <padding><Insets left="10" right="10" bottom="6"/></padding>
+                                <Label text="Export:" styleClass="export-label"/>
+                                <Button fx:id="exportSourceOptimalBtn" text="Format" onAction="#handleExportSourceOptimal" styleClass="export-button"/>
+                                <Button fx:id="exportSourcePngBtn" text="PNG" onAction="#handleExportSourcePng" styleClass="export-button"/>
+                            </HBox>
+                        </VBox>
                     </TitledPane>
                 </VBox>
                 
@@ -87,11 +95,19 @@
                         </StackPane>
                     </ScrollPane>
                     <TitledPane text="Target Palette" expanded="true" collapsible="true" styleClass="palette-pane">
-                        <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
-                            <FlowPane fx:id="targetPalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
-                                <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
-                            </FlowPane>
-                        </ScrollPane>
+                        <VBox spacing="8">
+                            <ScrollPane fitToWidth="true" styleClass="palette-scroll" prefHeight="120" maxHeight="200">
+                                <FlowPane fx:id="targetPalettePane" hgap="8" vgap="8" prefWrapLength="400" alignment="CENTER_LEFT">
+                                    <padding><Insets top="10" bottom="10" left="10" right="10"/></padding>
+                                </FlowPane>
+                            </ScrollPane>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <padding><Insets left="10" right="10" bottom="6"/></padding>
+                                <Label text="Export:" styleClass="export-label"/>
+                                <Button fx:id="exportTargetOptimalBtn" text="Format" onAction="#handleExportTargetOptimal" styleClass="export-button"/>
+                                <Button fx:id="exportTargetPngBtn" text="PNG" onAction="#handleExportTargetPng" styleClass="export-button"/>
+                            </HBox>
+                        </VBox>
                     </TitledPane>
                 </VBox>
             </SplitPane>

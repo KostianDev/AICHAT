@@ -436,3 +436,32 @@
 .swap-button:pressed {
     -fx-background-color: #3b82f6;
 }
+
+.export-label {
+    -fx-text-fill: #909090;
+    -fx-font-size: 13px;
+}
+
+.export-button {
+    -fx-background-color: #383838;
+    -fx-text-fill: #c0c0c0;
+    -fx-background-radius: 4;
+    -fx-padding: 6 14 6 14;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.export-button:hover {
+    -fx-background-color: #4a9eff;
+    -fx-text-fill: white;
+}
+
+.export-button:pressed {
+    -fx-background-color: #3b82f6;
+}
+
+.export-button:disabled {
+    -fx-background-color: #2a2a2a;
+    -fx-text-fill: #555555;
+    -fx-cursor: default;
+}
