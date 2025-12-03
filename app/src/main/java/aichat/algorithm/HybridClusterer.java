@@ -11,7 +11,6 @@ public class HybridClusterer implements ClusteringStrategy {
     
     private static final int DEFAULT_BLOCK_SIZE = 1000;
     private static final int DEFAULT_MIN_PTS = 3;
-    private static final float DEFAULT_EPS = 25.0f;
     private static final int KMEANS_MAX_ITERATIONS = 50;
     private static final double KMEANS_THRESHOLD = 1.0;
     private static final int PARALLEL_THRESHOLD = 500;
