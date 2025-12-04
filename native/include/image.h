@@ -31,6 +31,16 @@ AICHAT_EXPORT void resynthesize_image(
     uint32_t* output_pixels
 );
 
+AICHAT_EXPORT void posterize_image(
+    const uint32_t* image_pixels,
+    int width,
+    int height,
+    const ColorPoint3f* target_palette,
+    const ColorPoint3f* source_palette,
+    int palette_size,
+    uint32_t* output_pixels
+);
+
 AICHAT_EXPORT int sample_pixels_from_image(
     const uint32_t* image_pixels,
     int total_pixels,

@@ -48,6 +48,7 @@ public class MainController {
     
     @FXML private ComboBox<ColorModel> colorModelCombo;
     @FXML private Spinner<Integer> kSpinner;
+    @FXML private CheckBox posterizeCheckBox;
     
     @FXML private Button loadSourceButton;
     @FXML private Button loadTargetButton;
@@ -276,26 +277,33 @@ public class MainController {
         }
         
         ColorModel colorModel = colorModelCombo.getValue();
+        boolean posterize = posterizeCheckBox != null && posterizeCheckBox.isSelected();
         
-        setProcessing(true, "Resynthesizing image...");
+        setProcessing(true, posterize ? "Posterizing image..." : "Resynthesizing image...");
         
         // Capture references to avoid race conditions
         final BufferedImage tgtImg = targetImage;
         final ColorPalette srcPal = sourcePalette;
         final ColorPalette tgtPal = targetPalette;
+        final boolean doPosterize = posterize;
         
         Task<BufferedImage> resynthTask = new Task<>() {
             @Override
             protected BufferedImage call() {
                 ImageHarmonyEngine engine = new ImageHarmonyEngine(colorModel);
-                return engine.resynthesize(tgtImg, srcPal, tgtPal);
+                if (doPosterize) {
+                    return engine.posterize(tgtImg, srcPal, tgtPal);
+                } else {
+                    return engine.resynthesize(tgtImg, srcPal, tgtPal);
+                }
             }
             
             @Override
             protected void succeeded() {
                 resultImage = getValue();
                 showResultWindow(resultImage);
-                setProcessing(false, "Resynthesis complete. Result shown in new window.");
+                String mode = doPosterize ? "Posterization" : "Resynthesis";
+                setProcessing(false, mode + " complete. Result shown in new window.");
             }
             
             @Override

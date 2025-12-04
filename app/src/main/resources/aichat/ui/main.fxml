@@ -45,6 +45,9 @@
                 
                 <Separator orientation="VERTICAL"/>
                 <Button fx:id="analyzeButton" text="Analyze" onAction="#handleAnalyze" styleClass="toolbar-button,action-button"/>
+                <CheckBox fx:id="posterizeCheckBox" text="Posterize" styleClass="toolbar-checkbox">
+                    <tooltip><Tooltip text="Posterize mode: output contains only palette colors (no blending)"/></tooltip>
+                </CheckBox>
                 <Button fx:id="resynthesizeButton" text="Resynthesize" onAction="#handleResynthesize" styleClass="toolbar-button,action-button-primary"/>
             </ToolBar>
         </VBox>

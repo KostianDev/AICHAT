@@ -120,6 +120,34 @@
     -fx-padding: 0 8 0 12;
 }
 
+.toolbar-checkbox {
+    -fx-text-fill: #e0e0e0;
+    -fx-font-size: 15px;
+    -fx-padding: 0 12 0 8;
+}
+
+.toolbar-checkbox .box {
+    -fx-background-color: #3c3c3c;
+    -fx-border-color: #5a5a5a;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-padding: 3;
+}
+
+.toolbar-checkbox:selected .box {
+    -fx-background-color: #2563eb;
+    -fx-border-color: #3b82f6;
+}
+
+.toolbar-checkbox .mark {
+    -fx-background-color: transparent;
+    -fx-shape: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
+}
+
+.toolbar-checkbox:selected .mark {
+    -fx-background-color: white;
+}
+
 .toolbar-combo,
 .toolbar-spinner {
     -fx-background-color: #3c3c3c;

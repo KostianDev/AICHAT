@@ -69,9 +69,31 @@ public class ImageHarmonyEngine {
         return new ColorPalette(resultColors);
     }
     
+    /**
+     * Resynthesize with color transfer - preserves image details.
+     * Each pixel's offset from the nearest target palette color is preserved
+     * when mapping to the source palette.
+     */
     public BufferedImage resynthesize(BufferedImage targetImage, 
                                        ColorPalette sourcePalette, 
                                        ColorPalette targetPalette) {
+        return resynthesizeInternal(targetImage, sourcePalette, targetPalette, false);
+    }
+    
+    /**
+     * Posterize - replaces each pixel with the exact color from source palette.
+     * Result will contain ONLY colors from the source palette (k colors max).
+     */
+    public BufferedImage posterize(BufferedImage targetImage, 
+                                    ColorPalette sourcePalette, 
+                                    ColorPalette targetPalette) {
+        return resynthesizeInternal(targetImage, sourcePalette, targetPalette, true);
+    }
+    
+    private BufferedImage resynthesizeInternal(BufferedImage targetImage, 
+                                                ColorPalette sourcePalette, 
+                                                ColorPalette targetPalette,
+                                                boolean posterize) {
         int[] mapping = targetPalette.computeMappingTo(sourcePalette);
         
         List<ColorPoint> targetColors = targetPalette.getColors();
@@ -89,6 +111,26 @@ public class ImageHarmonyEngine {
         
         int[] pixels = new int[width * height];
         targetImage.getRGB(0, 0, width, height, pixels, 0, width);
+        
+        // Posterize mode - direct palette color replacement
+        if (posterize) {
+            // Try native posterize first
+            if (nativeAccelerator.isAvailable()) {
+                int[] result = nativeAccelerator.posterizeImage(
+                    pixels, width, height,
+                    targetPalette,
+                    mappedSource
+                );
+                
+                if (result != null) {
+                    BufferedImage output = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                    output.setRGB(0, 0, width, height, result, 0, width);
+                    return output;
+                }
+            }
+            // Fallback to Java
+            return posterizeJava(targetImage, mappedSource, targetPalette);
+        }
         
         // Try GPU first for large images (>1MP) - much faster
         if (totalPixels > 1_000_000 && nativeAccelerator.hasOpenCL()) {
@@ -216,6 +258,36 @@ public class ImageHarmonyEngine {
                 );
                 
                 result.setRGB(x, y, newColor.toRGB());
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Posterization: replace each pixel with the exact palette color (no offset).
+     * Result contains only K distinct colors.
+     */
+    private BufferedImage posterizeJava(BufferedImage targetImage,
+                                         ColorPalette mappedSource,
+                                         ColorPalette targetPalette) {
+        List<ColorPoint> sourceColors = mappedSource.getColors();
+        List<ColorPoint> targetColors = targetPalette.getColors();
+        
+        int width = targetImage.getWidth();
+        int height = targetImage.getHeight();
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = targetImage.getRGB(x, y);
+                ColorPoint pixel = ColorPoint.fromRGB(rgb);
+                
+                int targetIndex = findClosestIndex(pixel, targetColors);
+                ColorPoint sourceCenter = sourceColors.get(targetIndex);
+                
+                // Direct replacement - no offset preservation
+                result.setRGB(x, y, sourceCenter.toRGB());
             }
         }
         

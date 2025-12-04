@@ -105,6 +105,22 @@ public final class NativeAccelerator {
         }
     }
     
+    public int[] posterizeImage(int[] pixels, int width, int height,
+                                 ColorPalette targetPalette, ColorPalette sourcePalette) {
+        if (!available || pixels.length == 0) {
+            return null;
+        }
+        
+        try (Arena arena = Arena.ofConfined()) {
+            float[] target = colorPaletteToFloatArray(targetPalette);
+            float[] source = colorPaletteToFloatArray(sourcePalette);
+            return nativeLib.posterizeImage(arena, pixels, width, height, target, source);
+        } catch (Exception e) {
+            System.err.println("Native posterize failed: " + e.getMessage());
+            return null;
+        }
+    }
+    
     public List<ColorPoint> samplePixels(List<ColorPoint> pixels, int sampleSize, long seed) {
         if (!available || pixels.isEmpty()) {
             return null;

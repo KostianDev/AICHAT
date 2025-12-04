@@ -284,3 +284,94 @@ AICHAT_EXPORT void resynthesize_image(
     
     free(lut);
 }
+
+// Posterize: replace each pixel with exact palette color (no offset preservation)
+AICHAT_EXPORT void posterize_image(
+    const uint32_t* image_pixels,
+    int width,
+    int height,
+    const ColorPoint3f* target_palette,
+    const ColorPoint3f* source_palette,
+    int palette_size,
+    uint32_t* output_pixels
+) {
+    int n = width * height;
+    
+    const int LUT_BITS = 7;
+    const int LUT_DIM = 1 << LUT_BITS;
+    const int LUT_SIZE = LUT_DIM * LUT_DIM * LUT_DIM;
+    const float LUT_SCALE = 255.0f / (float)(LUT_DIM - 1);
+    const int SHIFT = 8 - LUT_BITS;
+    
+    // For very large palettes, skip LUT
+    if (palette_size > 4096) {
+        #pragma omp parallel for schedule(static, 32768)
+        for (int i = 0; i < n; i++) {
+            uint32_t pixel = image_pixels[i];
+            ColorPoint3f point = {
+                .c1 = (float)((pixel >> 16) & 0xFF),
+                .c2 = (float)((pixel >> 8) & 0xFF),
+                .c3 = (float)(pixel & 0xFF)
+            };
+            
+#ifdef __AVX2__
+            int closest = find_nearest_perceptual_avx2(&point, target_palette, palette_size);
+#else
+            int closest = find_nearest_perceptual(&point, target_palette, palette_size);
+#endif
+            const ColorPoint3f* source_center = &source_palette[closest];
+            
+            int r = (int)(source_center->c1 + 0.5f);
+            int g = (int)(source_center->c2 + 0.5f);
+            int b = (int)(source_center->c3 + 0.5f);
+            
+            output_pixels[i] = (uint32_t)((r << 16) | (g << 8) | b);
+        }
+        return;
+    }
+    
+    // Build LUT for palette lookup
+    uint16_t* lut = (uint16_t*)malloc(LUT_SIZE * sizeof(uint16_t));
+    if (!lut) return;
+    
+    #pragma omp parallel for collapse(3) schedule(static)
+    for (int ri = 0; ri < LUT_DIM; ri++) {
+        for (int gi = 0; gi < LUT_DIM; gi++) {
+            for (int bi = 0; bi < LUT_DIM; bi++) {
+                ColorPoint3f p = { 
+                    ri * LUT_SCALE, 
+                    gi * LUT_SCALE, 
+                    bi * LUT_SCALE 
+                };
+#ifdef __AVX2__
+                lut[(ri << (LUT_BITS * 2)) | (gi << LUT_BITS) | bi] = 
+                    (uint16_t)find_nearest_perceptual_avx2(&p, target_palette, palette_size);
+#else
+                lut[(ri << (LUT_BITS * 2)) | (gi << LUT_BITS) | bi] = 
+                    (uint16_t)find_nearest_perceptual(&p, target_palette, palette_size);
+#endif
+            }
+        }
+    }
+    
+    // Apply direct color replacement using LUT
+    #pragma omp parallel for schedule(static, 32768)
+    for (int i = 0; i < n; i++) {
+        uint32_t pixel = image_pixels[i];
+        int pr = (pixel >> 16) & 0xFF;
+        int pg = (pixel >> 8) & 0xFF;
+        int pb = pixel & 0xFF;
+        
+        int idx = lut[((pr >> SHIFT) << (LUT_BITS * 2)) | ((pg >> SHIFT) << LUT_BITS) | (pb >> SHIFT)];
+        
+        const ColorPoint3f* source_center = &source_palette[idx];
+        
+        int r = (int)(source_center->c1 + 0.5f);
+        int g = (int)(source_center->c2 + 0.5f);
+        int b = (int)(source_center->c3 + 0.5f);
+        
+        output_pixels[i] = (uint32_t)((r << 16) | (g << 8) | b);
+    }
+    
+    free(lut);
+}

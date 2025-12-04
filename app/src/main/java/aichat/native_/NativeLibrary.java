@@ -1,8 +1,12 @@
 package aichat.native_;
 
+import java.io.InputStream;
+import java.io.IOException;
 import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 
 public final class NativeLibrary {
@@ -18,6 +22,7 @@ public final class NativeLibrary {
     private final MethodHandle rgb_to_lab_batch;
     private final MethodHandle lab_to_rgb_batch;
     private final MethodHandle resynthesize_image;
+    private final MethodHandle posterize_image;
     private final MethodHandle extract_pixels;
     private final MethodHandle sample_pixels;
     private final MethodHandle aichat_native_version;
@@ -102,6 +107,17 @@ public final class NativeLibrary {
                 ));
             
             this.resynthesize_image = lookupFunction("resynthesize_image",
+                FunctionDescriptor.ofVoid(
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS
+                ));
+            
+            this.posterize_image = lookupFunction("posterize_image",
                 FunctionDescriptor.ofVoid(
                     ValueLayout.ADDRESS,
                     ValueLayout.JAVA_INT,
@@ -245,6 +261,7 @@ public final class NativeLibrary {
             this.rgb_to_lab_batch = null;
             this.lab_to_rgb_batch = null;
             this.resynthesize_image = null;
+            this.posterize_image = null;
             this.extract_pixels = null;
             this.sample_pixels = null;
             this.aichat_native_version = null;
@@ -299,13 +316,22 @@ public final class NativeLibrary {
             }
         }
         
-        // Try loading from resources (works when running from IDE)
+        // Try loading from resources (extract to temp if inside JAR)
         try {
             String resourcePath = "/native/" + platform + "/" + libName;
             var url = getClass().getResource(resourcePath);
             if (url != null) {
-                Path libPath = Path.of(url.toURI());
-                return SymbolLookup.libraryLookup(libPath, Arena.global());
+                if (url.getProtocol().equals("file")) {
+                    // Direct file access (IDE mode)
+                    Path libPath = Path.of(url.toURI());
+                    return SymbolLookup.libraryLookup(libPath, Arena.global());
+                } else {
+                    // Inside JAR - extract to temp directory
+                    Path tempLib = extractLibraryFromJar(resourcePath, libName);
+                    if (tempLib != null) {
+                        return SymbolLookup.libraryLookup(tempLib, Arena.global());
+                    }
+                }
             }
         } catch (Exception e) {
             System.err.println("Failed to load from resources: " + e.getMessage());
@@ -331,6 +357,31 @@ public final class NativeLibrary {
         
         System.err.println("Native library not found. Using Java fallback.");
         return null;
+    }
+    
+    private Path extractLibraryFromJar(String resourcePath, String libName) {
+        try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+            if (is == null) {
+                return null;
+            }
+            
+            // Create temp directory for native libs (survives between runs)
+            Path tempDir = Path.of(System.getProperty("java.io.tmpdir"), "aichat-native");
+            Files.createDirectories(tempDir);
+            
+            Path tempLib = tempDir.resolve(libName);
+            
+            // Extract if not exists or if newer in JAR
+            if (!Files.exists(tempLib)) {
+                Files.copy(is, tempLib, StandardCopyOption.REPLACE_EXISTING);
+                tempLib.toFile().setExecutable(true);
+            }
+            
+            return tempLib;
+        } catch (IOException e) {
+            System.err.println("Failed to extract library from JAR: " + e.getMessage());
+            return null;
+        }
     }
     
     private MethodHandle lookupFunction(String name, FunctionDescriptor descriptor) {
@@ -479,6 +530,38 @@ public final class NativeLibrary {
             return result;
         } catch (Throwable t) {
             throw new RuntimeException("Resynthesize native call failed", t);
+        }
+    }
+    
+    public int[] posterizeImage(Arena arena, int[] imagePixels, int width, int height,
+                                 float[] targetPalette, float[] sourcePalette) {
+        if (posterize_image == null) {
+            throw new UnsupportedOperationException("Native library not loaded");
+        }
+        
+        int paletteSize = sourcePalette.length / 3;
+        int n = width * height;
+        
+        MemorySegment imageNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        MemorySegment targetPaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, targetPalette.length);
+        MemorySegment sourcePaletteNative = arena.allocate(ValueLayout.JAVA_FLOAT, sourcePalette.length);
+        MemorySegment outputNative = arena.allocate(ValueLayout.JAVA_INT, n);
+        
+        imageNative.copyFrom(MemorySegment.ofArray(imagePixels));
+        targetPaletteNative.copyFrom(MemorySegment.ofArray(targetPalette));
+        sourcePaletteNative.copyFrom(MemorySegment.ofArray(sourcePalette));
+        
+        try {
+            posterize_image.invokeExact(
+                imageNative, width, height,
+                targetPaletteNative, sourcePaletteNative, paletteSize, outputNative
+            );
+            
+            int[] result = new int[n];
+            MemorySegment.ofArray(result).copyFrom(outputNative);
+            return result;
+        } catch (Throwable t) {
+            throw new RuntimeException("Posterize native call failed", t);
         }
     }
     
