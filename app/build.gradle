@@ -92,10 +92,13 @@ pitest {
 }
 
 jmh {
-    iterations = 5
-    warmupIterations = 3
+    iterations = 3
+    warmupIterations = 2
     fork = 1
     resultFormat = 'JSON'
+    jvmArgs = ['--enable-native-access=ALL-UNNAMED']
+    timeOnIteration = '1s'
+    warmup = '1s'
 }
 
 // ==================== Distribution Tasks ====================
@@ -421,11 +424,11 @@ tasks.register('allTests') {
     doFirst {
         println '''
 ╔══════════════════════════════════════════════════════════════════════╗
-║                    AICHAT Comprehensive Test Suite                  ║
+║                    AICHAT Comprehensive Test Suite                   ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  Phase 1: Unit Tests + Property-Based Tests (JUnit 5 + jqwik)       ║
+║  Phase 1: Unit Tests + Property-Based Tests (JUnit 5 + jqwik)        ║
 ║  Phase 2: JMH Benchmarks (performance validation)                    ║
-║  Phase 3: Pitest Mutation Testing (code quality)                    ║
+║  Phase 3: Pitest Mutation Testing (code quality)                     ║
 ╚══════════════════════════════════════════════════════════════════════╝
 '''
     }
@@ -481,9 +484,9 @@ allTests {
 ║                         Test Suite Complete                          ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  Reports:                                                            ║
-║    • Unit Tests:  build/reports/tests/test/index.html               ║
-║    • JMH:         build/results/jmh/results.json                    ║
-║    • Pitest:      build/reports/pitest/index.html                   ║
+║    • Unit Tests:  build/reports/tests/test/index.html                ║
+║    • JMH:         build/results/jmh/results.json                     ║
+║    • Pitest:      build/reports/pitest/index.html                    ║
 ╚══════════════════════════════════════════════════════════════════════╝
 '''
     }

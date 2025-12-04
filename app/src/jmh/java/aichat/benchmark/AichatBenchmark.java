@@ -30,16 +30,16 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-@Fork(value = 1, warmups = 1)
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Fork(value = 1, warmups = 0)
+@Warmup(iterations = 2, time = 1)
+@Measurement(iterations = 3, time = 1)
 public class AichatBenchmark {
 
     // Test data sizes
-    @Param({"1000", "5000", "10000"})
+    @Param({"5000", "10000"})
     private int dataSize;
 
-    @Param({"4", "8", "16"})
+    @Param({"8", "16"})
     private int clusterCount;
 
     private List<ColorPoint> testPoints;

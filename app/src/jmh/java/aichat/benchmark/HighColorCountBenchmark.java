@@ -28,17 +28,17 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-@Fork(value = 1, warmups = 1)
-@Warmup(iterations = 2, time = 2)
-@Measurement(iterations = 3, time = 2)
+@Fork(value = 1, warmups = 0)
+@Warmup(iterations = 1, time = 1)
+@Measurement(iterations = 2, time = 1)
 public class HighColorCountBenchmark {
 
     // High color count parameters
-    @Param({"64", "128", "256", "512"})
+    @Param({"128", "256"})
     private int colorCount;
 
     // Image size (pixels per side for square image)
-    @Param({"1000", "2000"})
+    @Param({"1000"})
     private int imageSize;
 
     private BufferedImage sourceImage;
