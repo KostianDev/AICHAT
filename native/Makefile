@@ -89,7 +89,7 @@ endif
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET = $(BUILD_DIR)/$(LIB_TARGET)
 
-.PHONY: all clean install info windows linux macos all-platforms
+.PHONY: all clean install info windows linux macos all-platforms variants scalar simd openmp
 
 all: info $(BUILD_DIR) $(TARGET) install
 
@@ -98,6 +98,7 @@ info:
 	@echo "Platform: $(PLATFORM)"
 	@echo "TurboJPEG: $(if $(HAS_TURBOJPEG),YES,NO)"
 	@echo "OpenCL: $(if $(HAS_OPENCL),YES,NO)"
+	@echo "Variant: $(if $(VARIANT),$(VARIANT),default)"
 
 linux:
 	$(MAKE) clean
@@ -113,6 +114,41 @@ all-platforms:
 	@echo ""
 	@echo "=== Building for Windows ==="
 	$(MAKE) windows
+
+# Build variants for testing (scalar, simd, openmp)
+# These create separate libraries that can be loaded for differential testing
+
+scalar:
+	@echo "=== Building SCALAR variant (no AVX2, no OpenMP) ==="
+	$(MAKE) clean
+	$(MAKE) VARIANT=scalar \
+		CFLAGS_PLATFORM="-O3 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_SCALAR" \
+		LDFLAGS="-shared -fPIC" \
+		LIB_TARGET="libaichat_native_scalar.so"
+	@mv $(TARGET_DIR)/libaichat_native_scalar.so $(TARGET_DIR)/ 2>/dev/null || true
+
+simd:
+	@echo "=== Building SIMD variant (AVX2, no OpenMP) ==="
+	$(MAKE) clean
+	$(MAKE) VARIANT=simd \
+		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_SIMD" \
+		LDFLAGS="-shared -fPIC" \
+		LIB_TARGET="libaichat_native_simd.so"
+	@mv $(TARGET_DIR)/libaichat_native_simd.so $(TARGET_DIR)/ 2>/dev/null || true
+
+openmp:
+	@echo "=== Building OPENMP variant (AVX2 + OpenMP) ==="
+	$(MAKE) clean
+	$(MAKE) VARIANT=openmp \
+		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -fopenmp -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_OPENMP" \
+		LDFLAGS="-shared -fPIC -fopenmp" \
+		LIB_TARGET="libaichat_native_openmp.so"
+	@mv $(TARGET_DIR)/libaichat_native_openmp.so $(TARGET_DIR)/ 2>/dev/null || true
+
+variants: scalar simd openmp
+	@echo ""
+	@echo "=== All variants built ==="
+	@ls -la $(TARGET_DIR)/libaichat_native*.so
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

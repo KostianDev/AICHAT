@@ -284,21 +284,42 @@ public final class NativeLibrary {
     
     private SymbolLookup loadLibrary() {
         String osName = System.getProperty("os.name").toLowerCase();
-        String libName;
         String platform;
+        String libExtension;
         
         if (osName.contains("linux")) {
-            libName = "libaichat_native.so";
+            libExtension = ".so";
             platform = "linux";
         } else if (osName.contains("mac") || osName.contains("darwin")) {
-            libName = "libaichat_native.dylib";
+            libExtension = ".dylib";
             platform = "macos";
         } else if (osName.contains("win")) {
-            libName = "aichat_native.dll";
+            libExtension = ".dll";
             platform = "windows";
         } else {
             System.err.println("Unsupported OS: " + osName);
             return null;
+        }
+        
+        // Check for variant (for testing different optimization levels)
+        // Valid variants: "scalar", "simd", "openmp"
+        String variant = System.getProperty("native.variant");
+        String libName;
+        if (variant != null && !variant.isEmpty()) {
+            // Load variant library (e.g., libaichat_native_scalar.so)
+            if (platform.equals("windows")) {
+                libName = "aichat_native_" + variant + libExtension;
+            } else {
+                libName = "libaichat_native_" + variant + libExtension;
+            }
+            System.out.println("Loading native library variant: " + variant);
+        } else {
+            // Default library name
+            if (platform.equals("windows")) {
+                libName = "aichat_native" + libExtension;
+            } else {
+                libName = "libaichat_native" + libExtension;
+            }
         }
         
         // Try java.library.path first (set by launcher script)

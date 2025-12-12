@@ -154,6 +154,30 @@ The native library (`libaichat_native.so` / `aichat_native.dll`) uses **all avai
 
 **Note:** This native code uses all optimizations together. The compiler automatically vectorizes loops with AVX2, and OpenMP parallelizes batch operations.
 
+### Testing Native Optimization Variants
+
+For thorough testing, you can build and test **separate library variants** with different optimization levels:
+
+```bash
+# Build all variants (scalar, simd, openmp)
+cd native && make variants
+
+# Test each variant separately
+./gradlew testScalar    # No AVX2, no OpenMP (baseline)
+./gradlew testSimd      # AVX2 only, no OpenMP
+./gradlew testOpenMP    # AVX2 + OpenMP (full optimization)
+
+# Or run all variants sequentially
+./gradlew testNativeVariants
+```
+
+This creates separate libraries:
+- `libaichat_native_scalar.so` - Pure C without vectorization or parallelism
+- `libaichat_native_simd.so` - AVX2 vectorization, single-threaded
+- `libaichat_native_openmp.so` - AVX2 + OpenMP parallel loops
+
+All variants must pass the same tests, ensuring that SIMD/OpenMP optimizations don't break correctness.
+
 ### Path Selection
 
 The execution path is selected automatically:

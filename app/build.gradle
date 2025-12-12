@@ -74,7 +74,7 @@ tasks.named('test') {
     jvmArgs '--enable-native-access=ALL-UNNAMED'
     
     systemProperty 'force.java', System.getProperty('force.java', 'false')
-    systemProperty 'native.variant', System.getProperty('native.variant', 'auto')
+    // Don't set native.variant for default tests - uses main libaichat_native library
     
     reports {
         html.outputLocation = file("${testResultsDir}/reports/test")
@@ -206,6 +206,157 @@ tasks.register('testAllProfiles') {
 tasks.named('testJava') {
     mustRunAfter 'test'
 }
+
+// Native variant testing tasks (for differential testing of optimization levels)
+// These require building variants first: cd native && make variants
+
+tasks.register('buildNativeVariants', Exec) {
+    description = 'Build all native library variants (scalar, simd, openmp)'
+    group = 'build'
+    workingDir "${projectDir}/../native"
+    commandLine 'make', 'variants'
+}
+
+tasks.register('testScalar', Test) {
+    description = 'Run tests with SCALAR native library (no AVX2, no OpenMP)'
+    group = 'verification'
+    dependsOn 'buildNativeVariants', 'compileTestJava', 'processTestResources'
+    
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    
+    useJUnitPlatform()
+    include '**/*Test.class'
+    include '**/*Tests.class'
+    
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'native.variant', 'scalar'
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/testScalar")
+        junitXml.outputLocation = file("${testResultsDir}/junit/testScalar")
+    }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║               NATIVE VARIANT: SCALAR (no optimizations)              ║
+║  Testing baseline implementation without SIMD or parallel execution  ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+tasks.register('testSimd', Test) {
+    description = 'Run tests with SIMD native library (AVX2, no OpenMP)'
+    group = 'verification'
+    dependsOn 'buildNativeVariants', 'compileTestJava', 'processTestResources'
+    
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    
+    useJUnitPlatform()
+    include '**/*Test.class'
+    include '**/*Tests.class'
+    
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'native.variant', 'simd'
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/testSimd")
+        junitXml.outputLocation = file("${testResultsDir}/junit/testSimd")
+    }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║               NATIVE VARIANT: SIMD (AVX2 vectorization)              ║
+║  Testing AVX2 SIMD implementation (single-threaded)                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+tasks.register('testOpenMP', Test) {
+    description = 'Run tests with OpenMP native library (AVX2 + OpenMP)'
+    group = 'verification'
+    dependsOn 'buildNativeVariants', 'compileTestJava', 'processTestResources'
+    
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    
+    useJUnitPlatform()
+    include '**/*Test.class'
+    include '**/*Tests.class'
+    
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'native.variant', 'openmp'
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/testOpenMP")
+        junitXml.outputLocation = file("${testResultsDir}/junit/testOpenMP")
+    }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║               NATIVE VARIANT: OpenMP (AVX2 + parallelism)            ║
+║  Testing full optimization: SIMD + multi-threaded parallel execution ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+tasks.register('testNativeVariants') {
+    description = 'Run tests with all native library variants (scalar, simd, openmp)'
+    group = 'verification'
+    dependsOn 'testScalar', 'testSimd', 'testOpenMP'
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║              TESTING ALL NATIVE OPTIMIZATION VARIANTS                ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Phase 1: Scalar (baseline, no AVX2, no OpenMP)                      ║
+║  Phase 2: SIMD (AVX2 vectorization, single-threaded)                 ║
+║  Phase 3: OpenMP (AVX2 + parallel multi-threading)                   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  This validates that all optimization code paths are correct         ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+    
+    doLast {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║              ALL NATIVE VARIANTS TESTED SUCCESSFULLY                 ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  ✓ Scalar variant: PASSED                                            ║
+║  ✓ SIMD variant: PASSED                                              ║
+║  ✓ OpenMP variant: PASSED                                            ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+// Ensure variant tests run sequentially
+tasks.named('testSimd') { mustRunAfter 'testScalar' }
+tasks.named('testOpenMP') { mustRunAfter 'testSimd' }
 
 pitest {
     targetClasses = ['aichat.color.ColorSpaceConverter', 'aichat.model.*']
@@ -545,7 +696,7 @@ tasks.register('allDist') {
 }
 
 tasks.register('allTests') {
-    description = 'Run all tests: default + Java fallback, JMH benchmarks, and Pitest mutation testing'
+    description = 'Run all tests: default + Java fallback + native variants, JMH benchmarks, and Pitest mutation testing'
     group = 'verification'
     
     doFirst {
@@ -555,6 +706,7 @@ tasks.register('allTests') {
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  Phase 1: Default Tests (with native acceleration)                   ║
 ║  Phase 2: Java-only Fallback Tests (verify pure Java works)          ║
+║  Phase 2.5: Native Variants (scalar/simd/openmp)                     ║
 ║  Phase 3: JMH Benchmarks (performance validation)                    ║
 ║  Phase 4: Pitest Mutation Testing (code quality)                     ║
 ╚══════════════════════════════════════════════════════════════════════╝
@@ -588,11 +740,24 @@ tasks.register('testPhase2Java') {
     finalizedBy 'testJava'
 }
 
-tasks.register('testPhase3Benchmark') {
-    description = 'Phase 3: Run JMH benchmarks (quick mode)'
+tasks.register('testPhase2NativeVariants') {
+    description = 'Phase 2.5: Run tests with native library variants (scalar, simd, openmp)'
     group = 'verification'
     dependsOn 'testPhase2Java'
     mustRunAfter 'testPhase2Java'
+    
+    doFirst {
+        println "\n═══ Phase 2.5: Native Optimization Variants ═══"
+    }
+    
+    finalizedBy 'testNativeVariants'
+}
+
+tasks.register('testPhase3Benchmark') {
+    description = 'Phase 3: Run JMH benchmarks (quick mode)'
+    group = 'verification'
+    dependsOn 'testPhase2NativeVariants'
+    mustRunAfter 'testPhase2NativeVariants'
     
     doFirst {
         println "\n═══ Phase 3: JMH Benchmarks ═══"
@@ -615,7 +780,7 @@ tasks.register('testPhase4Mutation') {
 }
 
 allTests {
-    dependsOn 'testPhase1', 'testPhase2Java', 'testPhase3Benchmark', 'testPhase4Mutation'
+    dependsOn 'testPhase1', 'testPhase2Java', 'testPhase2NativeVariants', 'testPhase3Benchmark', 'testPhase4Mutation'
     
     doLast {
         println '''
@@ -625,6 +790,7 @@ allTests {
 ║  Reports (all in test-results/):                                     ║
 ║    • Default Tests:   test-results/reports/test/index.html           ║
 ║    • Java Tests:      test-results/reports/testJava/index.html       ║
+║    • Native Variants: test-results/reports/testScalar|Simd|OpenMP/   ║
 ║    • Performance:     test-results/performance/                      ║
 ║    • JMH:             test-results/jmh/results.json                  ║
 ║    • Pitest:          test-results/pitest/index.html                 ║
