@@ -29,7 +29,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class HighColorCountLoadTest {
 
     private static final long SEED = 42L;
-    private static final Path OUTPUT_DIR = Path.of("test-results/performance");
+    private static final String PROJECT_ROOT = System.getProperty("user.dir").replace("/app", "");
+    private static final Path OUTPUT_DIR = Path.of(PROJECT_ROOT, "test-results/performance");
     private static final Path CSV_FILE = OUTPUT_DIR.resolve("performance-results.csv");
     private static final Path JSON_FILE = OUTPUT_DIR.resolve("performance-results.json");
     

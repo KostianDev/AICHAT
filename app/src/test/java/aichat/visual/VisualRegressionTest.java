@@ -35,8 +35,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisabledIf("isForceJavaMode")
 class VisualRegressionTest {
 
+    private static final String PROJECT_ROOT = System.getProperty("user.dir").replace("/app", "");
     private static final String GOLDEN_DIR = "src/test/resources/golden";
-    private static final String ACTUAL_DIR = "test-results/visual";
+    private static final String ACTUAL_DIR = PROJECT_ROOT + "/test-results/visual";
     private static final double THRESHOLD_PERCENT = 0.5;
 
     static boolean isForceJavaMode() {
