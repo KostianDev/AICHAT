@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=edge"/>
+<title>Test results - High Color Count Load Tests</title>
+<link href="../css/base-style.css" rel="stylesheet" type="text/css"/>
+<link href="../css/style.css" rel="stylesheet" type="text/css"/>
+<script src="../js/report.js" type="text/javascript"></script>
+</head>
+<body>
+<div id="content">
+<h1>High Color Count Load Tests</h1>
+<div class="breadcrumbs">
+<a href="../index.html">all</a> &gt; 
+<a href="../packages/aichat.core.html">aichat.core</a> &gt; HighColorCountLoadTest</div>
+<div id="summary">
+<table>
+<tr>
+<td>
+<div class="summaryGroup">
+<table>
+<tr>
+<td>
+<div class="infoBox" id="tests">
+<div class="counter">12</div>
+<p>tests</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="failures">
+<div class="counter">0</div>
+<p>failures</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="ignored">
+<div class="counter">0</div>
+<p>ignored</p>
+</div>
+</td>
+<td>
+<div class="infoBox" id="duration">
+<div class="counter">15.341s</div>
+<p>duration</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</td>
+<td>
+<div class="infoBox success" id="successRate">
+<div class="percent">100%</div>
+<p>successful</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a href="#">Tests</a>
+</li>
+<li>
+<a href="#">Standard output</a>
+</li>
+</ul>
+<div class="tab">
+<h2>Tests</h2>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Method name</th>
+<th>Duration</th>
+<th>Result</th>
+</tr>
+</thead>
+<tr>
+<td class="success">16MP RGB k=256</td>
+<td class="success">test16MP_256colors_RGB()</td>
+<td class="success">1.952s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">16MP RGB k=512</td>
+<td class="success">test16MP_512colors_RGB()</td>
+<td class="success">2.065s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">2MP CIELAB k=256 - Analysis and Resynthesis</td>
+<td class="success">test2MP_256colors_CIELAB()</td>
+<td class="success">0.333s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">2MP RGB k=256</td>
+<td class="success">test2MP_256colors_RGB()</td>
+<td class="success">0.439s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">2MP RGB k=512 - Analysis and Resynthesis</td>
+<td class="success">test2MP_512colors_RGB()</td>
+<td class="success">0.497s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">8MP CIELAB k=256</td>
+<td class="success">test8MP_256colors_CIELAB()</td>
+<td class="success">0.973s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">8MP RGB k=256</td>
+<td class="success">test8MP_256colors_RGB()</td>
+<td class="success">1.017s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">8MP RGB k=512</td>
+<td class="success">test8MP_512colors_RGB()</td>
+<td class="success">1.132s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">Memory pressure test</td>
+<td class="success">testMemoryPressure()</td>
+<td class="success">2.396s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">Palette colors are within valid RGB range</td>
+<td class="success">testPaletteColorValidity()</td>
+<td class="success">0.458s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">Resynthesis dimensions match input</td>
+<td class="success">testResynthesisDimensions()</td>
+<td class="success">3.409s</td>
+<td class="success">passed</td>
+</tr>
+<tr>
+<td class="success">Scalability: k=64 vs k=256</td>
+<td class="success">testScalabilityK()</td>
+<td class="success">0.670s</td>
+<td class="success">passed</td>
+</tr>
+</table>
+</div>
+<div class="tab">
+<h2>Standard output</h2>
+<span class="code">
+<pre>=== Load Test Environment ===
+Native acceleration: true
+SIMD support: true
+OpenCL support: true
+Runtime CPUs: 16
+Max memory: 512 MB
+Force Java mode: false
+=============================
+
+--- 2MP RGB k=256 ---
+  Analyze: 88ms (limit: 10000ms)
+  Resynth: 99ms (limit: 10000ms) [20.2 MP/s]
+--- 2MP CIELAB k=256 ---
+  Analyze: 54ms (limit: 15000ms)
+  Resynth: 68ms (limit: 3000ms) [29.4 MP/s]
+--- 2MP RGB k=512 ---
+  Analyze: 97ms (limit: 20000ms)
+  Resynth: 181ms (limit: 10000ms) [11.0 MP/s]
+--- 8MP RGB k=256 ---
+  Analyze: 156ms (limit: 30000ms)
+  Resynth: 174ms (limit: 5000ms) [46.0 MP/s]
+--- 8MP CIELAB k=256 ---
+  Analyze: 125ms (limit: 45000ms)
+  Resynth: 164ms (limit: 8000ms) [48.8 MP/s]
+--- 8MP RGB k=512 ---
+  Analyze: 150ms (limit: 60000ms)
+  Resynth: 302ms (limit: 60000ms) [26.5 MP/s]
+--- 16MP RGB k=256 ---
+  Analyze: 272ms (limit: 60000ms)
+  Resynth: 347ms (limit: 10000ms) [46.1 MP/s]
+--- 16MP RGB k=512 ---
+  Analyze: 255ms (limit: 120000ms)
+  Resynth: 452ms (limit: 120000ms) [35.4 MP/s]
+Scalability: k=64 took 165.63ms, k=256 took 172.61ms (ratio: 1.04x)
+Memory: used=7MB, max=512MB (1.5%)
+CSV results exported to: /home/kostia/Desktop/VSProjects/AICHAT/test-results/performance/performance-results.csv
+JSON results exported to: /home/kostia/Desktop/VSProjects/AICHAT/test-results/performance/performance-results.json
+
+=== Performance Results Summary ===
+Test                       Analyze  Resynth       MP/s
+-------------------------------------------------------
+2MP RGB k=256                  88ms      99ms      20.2
+2MP CIELAB k=256               54ms      68ms      29.4
+2MP RGB k=512                  97ms     181ms      11.0
+8MP RGB k=256                 156ms     174ms      46.0
+8MP CIELAB k=256              125ms     164ms      48.8
+8MP RGB k=512                 150ms     302ms      26.5
+16MP RGB k=256                272ms     347ms      46.1
+16MP RGB k=512                255ms     452ms      35.4
+=======================================================
+</pre>
+</span>
+</div>
+</div>
+<div id="footer">
+<p>
+<div>
+<label class="hidden" id="label-for-line-wrapping-toggle" for="line-wrapping-toggle">Wrap lines
+<input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
+</label>
+</div>Generated by 
+<a href="https://www.gradle.org">Gradle 9.0.0</a> at Dec 12, 2025, 9:29:14 PM</p>
+</div>
+</div>
+</body>
+</html>

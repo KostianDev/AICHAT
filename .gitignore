@@ -12,4 +12,6 @@ native/deps/
 app/bin/
 docs/TECHNICAL_DOCUMENTATION.md
 docs/COURSE_REPORT.md
-test-results/
+test-results/visual/
+test-results/large-image/
+test-results/junit/
