@@ -4,34 +4,59 @@ import aichat.core.ImageHarmonyEngine.ColorModel;
 import aichat.model.ColorPalette;
 import aichat.native_.NativeAccelerator;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.condition.DisabledIf;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Load tests for high color count palettes (k=256, 512) on large images.
- * 
- * These tests validate:
- * 1. Scalability of clustering algorithm with high k values
- * 2. Memory efficiency with large palettes
- * 3. Resynthesis performance with/without LUT optimization
- * 4. Correctness under stress conditions
- * 
- * Test matrix:
- * - Image sizes: 2MP (1920x1080), 8MP (3840x2160), 16MP (4000x4000)
- * - Palette sizes: 256, 512 colors
- * - Color models: RGB, CIELAB
+ * Performance tests (Order 1-9) require native acceleration.
+ * Correctness tests (Order 10+) run in all modes.
  */
 @DisplayName("High Color Count Load Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class HighColorCountLoadTest {
 
     private static final long SEED = 42L;
+    private static final Path OUTPUT_DIR = Path.of("test-results/performance");
+    private static final Path CSV_FILE = OUTPUT_DIR.resolve("performance-results.csv");
+    private static final Path JSON_FILE = OUTPUT_DIR.resolve("performance-results.json");
+    
+    private static final List<PerformanceResult> results = new ArrayList<>();
+    
+    static boolean isForceJavaMode() {
+        return Boolean.getBoolean("force.java");
+    }
+    
+    record PerformanceResult(
+        String testId,
+        int widthPx,
+        int heightPx,
+        int megapixels,
+        int paletteSize,
+        String colorModel,
+        long analyzeMs,
+        long resynthesizeMs,
+        double mpPerSecond,
+        boolean nativeEnabled,
+        boolean simdEnabled,
+        boolean openclEnabled,
+        String timestamp
+    ) {}
 
     @BeforeAll
-    static void setup() {
+    static void setup() throws IOException {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         System.out.println("=== Load Test Environment ===");
         System.out.println("Native acceleration: " + accel.isAvailable());
@@ -39,14 +64,89 @@ class HighColorCountLoadTest {
         System.out.println("OpenCL support: " + accel.hasOpenCL());
         System.out.println("Runtime CPUs: " + Runtime.getRuntime().availableProcessors());
         System.out.println("Max memory: " + (Runtime.getRuntime().maxMemory() / 1024 / 1024) + " MB");
+        System.out.println("Force Java mode: " + NativeAccelerator.isForceJava());
         System.out.println("=============================\n");
+        
+        // Prepare output directory
+        Files.createDirectories(OUTPUT_DIR);
     }
-
-    // ==================== 2MP Tests (1920x1080 - Full HD) ====================
+    
+    @AfterAll
+    static void exportResults() throws IOException {
+        if (results.isEmpty()) {
+            System.out.println("No performance results to export");
+            return;
+        }
+        
+        // Export CSV
+        StringBuilder csv = new StringBuilder();
+        csv.append("test_id,width_px,height_px,megapixels,palette_size,color_model,");
+        csv.append("analyze_ms,resynthesize_ms,mp_per_second,native_enabled,simd_enabled,opencl_enabled,timestamp\n");
+        
+        for (PerformanceResult r : results) {
+            csv.append(String.format("%s,%d,%d,%d,%d,%s,%d,%d,%.2f,%b,%b,%b,%s%n",
+                r.testId, r.widthPx, r.heightPx, r.megapixels, r.paletteSize, r.colorModel,
+                r.analyzeMs, r.resynthesizeMs, r.mpPerSecond,
+                r.nativeEnabled, r.simdEnabled, r.openclEnabled, r.timestamp));
+        }
+        
+        Files.writeString(CSV_FILE, csv.toString(), 
+            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        System.out.println("CSV results exported to: " + CSV_FILE.toAbsolutePath());
+        
+        // Export JSON
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"generated\": \"").append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\",\n");
+        json.append("  \"environment\": {\n");
+        NativeAccelerator accel = NativeAccelerator.getInstance();
+        json.append("    \"native_available\": ").append(accel.isAvailable()).append(",\n");
+        json.append("    \"simd_enabled\": ").append(accel.hasSIMD()).append(",\n");
+        json.append("    \"opencl_enabled\": ").append(accel.hasOpenCL()).append(",\n");
+        json.append("    \"force_java\": ").append(NativeAccelerator.isForceJava()).append(",\n");
+        json.append("    \"cpu_cores\": ").append(Runtime.getRuntime().availableProcessors()).append(",\n");
+        json.append("    \"max_memory_mb\": ").append(Runtime.getRuntime().maxMemory() / 1024 / 1024).append("\n");
+        json.append("  },\n");
+        json.append("  \"results\": [\n");
+        
+        for (int i = 0; i < results.size(); i++) {
+            PerformanceResult r = results.get(i);
+            json.append("    {\n");
+            json.append("      \"test_id\": \"").append(r.testId).append("\",\n");
+            json.append("      \"dimensions\": { \"width\": ").append(r.widthPx).append(", \"height\": ").append(r.heightPx).append(" },\n");
+            json.append("      \"megapixels\": ").append(r.megapixels).append(",\n");
+            json.append("      \"palette_size\": ").append(r.paletteSize).append(",\n");
+            json.append("      \"color_model\": \"").append(r.colorModel).append("\",\n");
+            json.append("      \"timing\": {\n");
+            json.append("        \"analyze_ms\": ").append(r.analyzeMs).append(",\n");
+            json.append("        \"resynthesize_ms\": ").append(r.resynthesizeMs).append(",\n");
+            json.append("        \"mp_per_second\": ").append(String.format("%.2f", r.mpPerSecond)).append("\n");
+            json.append("      },\n");
+            json.append("      \"timestamp\": \"").append(r.timestamp).append("\"\n");
+            json.append("    }").append(i < results.size() - 1 ? "," : "").append("\n");
+        }
+        
+        json.append("  ]\n");
+        json.append("}\n");
+        
+        Files.writeString(JSON_FILE, json.toString(),
+            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        System.out.println("JSON results exported to: " + JSON_FILE.toAbsolutePath());
+        
+        System.out.println("\n=== Performance Results Summary ===");
+        System.out.printf("%-25s %8s %8s %10s%n", "Test", "Analyze", "Resynth", "MP/s");
+        System.out.println("-".repeat(55));
+        for (PerformanceResult r : results) {
+            System.out.printf("%-25s %7dms %7dms %9.1f%n",
+                r.testId, r.analyzeMs, r.resynthesizeMs, r.mpPerSecond);
+        }
+        System.out.println("=".repeat(55));
+    }
 
     @Test
     @Order(1)
-    @DisplayName("2MP RGB k=256 - Analysis and Resynthesis")
+    @DisplayName("2MP RGB k=256")
+    @DisabledIf("isForceJavaMode")
     void test2MP_256colors_RGB() {
         // Note: First test may be slower due to JIT warmup and OpenCL initialization
         runLoadTest(1920, 1080, 256, ColorModel.RGB, 
@@ -57,6 +157,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(2)
     @DisplayName("2MP CIELAB k=256 - Analysis and Resynthesis")
+    @DisabledIf("isForceJavaMode")
     void test2MP_256colors_CIELAB() {
         runLoadTest(1920, 1080, 256, ColorModel.CIELAB, 
             /* maxAnalyzeMs */ 15000, 
@@ -66,81 +167,66 @@ class HighColorCountLoadTest {
     @Test
     @Order(3)
     @DisplayName("2MP RGB k=512 - Analysis and Resynthesis")
+    @DisabledIf("isForceJavaMode")
     void test2MP_512colors_RGB() {
-        runLoadTest(1920, 1080, 512, ColorModel.RGB, 
-            /* maxAnalyzeMs */ 20000, 
-            /* maxResynthMs */ 10000);
+        runLoadTest(1920, 1080, 512, ColorModel.RGB, 20000, 10000);
     }
-
-    // ==================== 8MP Tests (3840x2160 - 4K UHD) ====================
 
     @Test
     @Order(4)
-    @DisplayName("8MP RGB k=256 - Analysis and Resynthesis")
+    @DisplayName("8MP RGB k=256")
+    @DisabledIf("isForceJavaMode")
     void test8MP_256colors_RGB() {
-        runLoadTest(3840, 2160, 256, ColorModel.RGB, 
-            /* maxAnalyzeMs */ 30000, 
-            /* maxResynthMs */ 5000);
+        runLoadTest(3840, 2160, 256, ColorModel.RGB, 30000, 5000);
     }
 
     @Test
     @Order(5)
-    @DisplayName("8MP CIELAB k=256 - Full pipeline")
+    @DisplayName("8MP CIELAB k=256")
+    @DisabledIf("isForceJavaMode")
     void test8MP_256colors_CIELAB() {
-        runLoadTest(3840, 2160, 256, ColorModel.CIELAB, 
-            /* maxAnalyzeMs */ 45000, 
-            /* maxResynthMs */ 8000);
+        runLoadTest(3840, 2160, 256, ColorModel.CIELAB, 45000, 8000);
     }
 
     @Test
     @Order(6)
-    @DisplayName("8MP RGB k=512 - High palette load test")
+    @DisplayName("8MP RGB k=512")
+    @DisabledIf("isForceJavaMode")
     void test8MP_512colors_RGB() {
-        runLoadTest(3840, 2160, 512, ColorModel.RGB, 
-            /* maxAnalyzeMs */ 60000, 
-            /* maxResynthMs */ 60000); // 512 colors bypasses LUT
+        runLoadTest(3840, 2160, 512, ColorModel.RGB, 60000, 60000);
     }
-
-    // ==================== 16MP Tests (4000x4000) ====================
 
     @Test
     @Order(7)
-    @DisplayName("16MP RGB k=256 - Maximum resolution test")
+    @DisplayName("16MP RGB k=256")
+    @DisabledIf("isForceJavaMode")
     void test16MP_256colors_RGB() {
-        runLoadTest(4000, 4000, 256, ColorModel.RGB, 
-            /* maxAnalyzeMs */ 60000, 
-            /* maxResynthMs */ 10000);
+        runLoadTest(4000, 4000, 256, ColorModel.RGB, 60000, 10000);
     }
 
     @Test
     @Order(8)
-    @DisplayName("16MP RGB k=512 - Stress test (no LUT)")
+    @DisplayName("16MP RGB k=512")
+    @DisabledIf("isForceJavaMode")
     void test16MP_512colors_RGB() {
-        // This tests the direct search path (no LUT for k>256)
-        runLoadTest(4000, 4000, 512, ColorModel.RGB, 
-            /* maxAnalyzeMs */ 120000, 
-            /* maxResynthMs */ 120000);
+        runLoadTest(4000, 4000, 512, ColorModel.RGB, 120000, 120000);
     }
-
-    // ==================== Scalability Analysis ====================
 
     @Test
     @Order(10)
-    @DisplayName("Scalability: k=64 vs k=256 on same image")
+    @DisplayName("Scalability: k=64 vs k=256")
     void testScalabilityK() {
         BufferedImage source = createRealisticImage(2000, 2000, 1L);
         BufferedImage target = createRealisticImage(2000, 2000, 2L);
         
         ImageHarmonyEngine engine = new ImageHarmonyEngine(ColorModel.RGB, SEED);
         
-        // k=64
         long start64 = System.nanoTime();
         ColorPalette src64 = engine.analyze(source, 64);
         ColorPalette tgt64 = engine.analyze(target, 64);
         engine.resynthesize(target, src64, tgt64);
         long time64 = System.nanoTime() - start64;
         
-        // k=256
         long start256 = System.nanoTime();
         ColorPalette src256 = engine.analyze(source, 256);
         ColorPalette tgt256 = engine.analyze(target, 256);
@@ -159,19 +245,16 @@ class HighColorCountLoadTest {
 
     @Test
     @Order(11)
-    @DisplayName("Memory pressure: Sequential large image processing")
+    @DisplayName("Memory pressure test")
     void testMemoryPressure() {
         ImageHarmonyEngine engine = new ImageHarmonyEngine(ColorModel.RGB, SEED);
         
-        // Process 5 large images sequentially
         for (int i = 0; i < 5; i++) {
             BufferedImage img = createRealisticImage(3000, 3000, i);
             ColorPalette palette = engine.analyze(img, 128);
-            
             assertEquals(128, palette.size(), "Iteration " + i + " failed");
         }
         
-        // Force GC and wait
         System.gc();
         try { Thread.sleep(100); } catch (InterruptedException ignored) {}
         
@@ -182,16 +265,13 @@ class HighColorCountLoadTest {
         System.out.printf("Memory: used=%dMB, max=%dMB (%.1f%%)%n",
             usedMemory / 1024 / 1024, maxMemory / 1024 / 1024, usagePercent);
         
-        // After processing and GC, should not use more than 80% of max heap
         assertTrue(usagePercent < 80,
             "Memory usage too high after processing: " + String.format("%.1f%%", usagePercent));
     }
 
-    // ==================== Correctness under Load ====================
-
     @Test
     @Order(12)
-    @DisplayName("Correctness: Palette colors are within valid RGB range")
+    @DisplayName("Palette colors are within valid RGB range")
     void testPaletteColorValidity() {
         ImageHarmonyEngine engine = new ImageHarmonyEngine(ColorModel.CIELAB, SEED);
         BufferedImage image = createRealisticImage(2000, 2000, 123L);
@@ -215,7 +295,7 @@ class HighColorCountLoadTest {
 
     @Test
     @Order(13)
-    @DisplayName("Correctness: Resynthesis output dimensions match input")
+    @DisplayName("Resynthesis dimensions match input")
     void testResynthesisDimensions() {
         ImageHarmonyEngine engine = new ImageHarmonyEngine(ColorModel.RGB, SEED);
         
@@ -237,27 +317,21 @@ class HighColorCountLoadTest {
         }
     }
 
-    // ==================== Helper Methods ====================
-
     private void runLoadTest(int width, int height, int k, ColorModel model,
                             long maxAnalyzeMs, long maxResynthMs) {
         int megapixels = (width * height) / 1_000_000;
         String testId = String.format("%dMP %s k=%d", megapixels, model, k);
-        
         System.out.printf("--- %s ---%n", testId);
         
         BufferedImage source = createRealisticImage(width, height, 1L);
         BufferedImage target = createRealisticImage(width, height, 2L);
-        
         ImageHarmonyEngine engine = new ImageHarmonyEngine(model, SEED);
         
-        // Warm-up
         if (megapixels <= 4) {
             BufferedImage warmup = createRealisticImage(500, 500, 0L);
             engine.analyze(warmup, Math.min(k, 64));
         }
         
-        // Analyze
         long startAnalyze = System.nanoTime();
         ColorPalette srcPalette = engine.analyze(source, k);
         ColorPalette tgtPalette = engine.analyze(target, k);
@@ -266,7 +340,6 @@ class HighColorCountLoadTest {
         assertEquals(k, srcPalette.size(), "Source palette size mismatch");
         assertEquals(k, tgtPalette.size(), "Target palette size mismatch");
         
-        // Resynthesize
         long startResynth = System.nanoTime();
         BufferedImage result = engine.resynthesize(target, srcPalette, tgtPalette);
         long resynthMs = (System.nanoTime() - startResynth) / 1_000_000;
@@ -275,11 +348,19 @@ class HighColorCountLoadTest {
         assertEquals(width, result.getWidth());
         assertEquals(height, result.getHeight());
         
-        double mpPerSec = megapixels / (resynthMs / 1000.0);
+        double mpPerSec = resynthMs > 0 ? megapixels / (resynthMs / 1000.0) : 0;
         
         System.out.printf("  Analyze: %dms (limit: %dms)%n", analyzeMs, maxAnalyzeMs);
         System.out.printf("  Resynth: %dms (limit: %dms) [%.1f MP/s]%n", 
             resynthMs, maxResynthMs, mpPerSec);
+        
+        NativeAccelerator accel = NativeAccelerator.getInstance();
+        results.add(new PerformanceResult(
+            testId, width, height, megapixels, k, model.name(),
+            analyzeMs, resynthMs, mpPerSec,
+            accel.isAvailable(), accel.hasSIMD(), accel.hasOpenCL(),
+            LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        ));
         
         assertTrue(analyzeMs < maxAnalyzeMs,
             testId + " analysis too slow: " + analyzeMs + "ms > " + maxAnalyzeMs + "ms");
@@ -287,15 +368,10 @@ class HighColorCountLoadTest {
             testId + " resynthesis too slow: " + resynthMs + "ms > " + maxResynthMs + "ms");
     }
 
-    /**
-     * Creates a realistic test image with multiple color regions and gradients.
-     * Simulates a natural photograph with smooth transitions.
-     */
     private BufferedImage createRealisticImage(int width, int height, long seed) {
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Random rnd = new Random(seed);
         
-        // Create 5-8 color blobs
         int numBlobs = 5 + rnd.nextInt(4);
         int[] blobX = new int[numBlobs];
         int[] blobY = new int[numBlobs];
@@ -311,7 +387,6 @@ class HighColorCountLoadTest {
         
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                // Blend based on distance to blobs
                 double totalWeight = 0;
                 double r = 0, g = 0, b = 0;
                 
@@ -327,7 +402,6 @@ class HighColorCountLoadTest {
                     totalWeight += weight;
                 }
                 
-                // Add noise
                 int noise = rnd.nextInt(16) - 8;
                 int finalR = clamp((int)(r / totalWeight) + noise);
                 int finalG = clamp((int)(g / totalWeight) + noise);

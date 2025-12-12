@@ -14,17 +14,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-/**
- * JMH Benchmarks for high color count (k=256, 512) scenarios.
- * 
- * Run with: ./gradlew jmh -Pjmh.include="HighColorCountBenchmark"
- * 
- * Measures:
- * 1. Clustering performance with high k values (256, 512)
- * 2. Resynthesis with/without LUT optimization (k <= 256 uses LUT)
- * 3. Scalability: how performance degrades with increasing k
- * 4. Image size impact at high color counts
- */
+/** JMH Benchmark: high color count (k=128, 256) scenarios. */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
@@ -33,11 +23,9 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 2, time = 1)
 public class HighColorCountBenchmark {
 
-    // High color count parameters
     @Param({"128", "256"})
     private int colorCount;
 
-    // Image size (pixels per side for square image)
     @Param({"1000"})
     private int imageSize;
 
@@ -52,7 +40,6 @@ public class HighColorCountBenchmark {
     public void setup() {
         int numPixels = imageSize * imageSize;
         
-        // Generate test data
         sourceImage = generateRealisticImage(imageSize, imageSize, 1L);
         targetImage = generateRealisticImage(imageSize, imageSize, 2L);
         colorPoints = extractColorPoints(sourceImage);
@@ -65,14 +52,10 @@ public class HighColorCountBenchmark {
             imageSize, imageSize, numPixels, colorCount);
     }
 
-    // ==================== Clustering Benchmarks ====================
-
     @Benchmark
     public void clusteringHighK(Blackhole bh) {
         bh.consume(clusterer.cluster(colorPoints, colorCount));
     }
-
-    // ==================== Analysis Benchmarks ====================
 
     @Benchmark
     public void analyzeRgbHighK(Blackhole bh) {
@@ -83,8 +66,6 @@ public class HighColorCountBenchmark {
     public void analyzeCielabHighK(Blackhole bh) {
         bh.consume(labEngine.analyze(sourceImage, colorCount));
     }
-
-    // ==================== Resynthesis Benchmarks ====================
 
     @Benchmark
     public void resynthesisRgbHighK(Blackhole bh) {
@@ -100,24 +81,18 @@ public class HighColorCountBenchmark {
         bh.consume(labEngine.resynthesize(targetImage, srcPalette, tgtPalette));
     }
 
-    // ==================== Full Pipeline Benchmark ====================
-
     @Benchmark
     public void fullPipelineRgbHighK(Blackhole bh) {
-        // Complete workflow: analyze both + resynthesize
         ColorPalette srcPalette = rgbEngine.analyze(sourceImage, colorCount);
         ColorPalette tgtPalette = rgbEngine.analyze(targetImage, colorCount);
         BufferedImage result = rgbEngine.resynthesize(targetImage, srcPalette, tgtPalette);
         bh.consume(result);
     }
 
-    // ==================== Helper Methods ====================
-
     private static BufferedImage generateRealisticImage(int width, int height, long seed) {
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Random rnd = new Random(seed);
         
-        // Create 5-8 color blobs for realistic color distribution
         int numBlobs = 5 + rnd.nextInt(4);
         int[] blobX = new int[numBlobs];
         int[] blobY = new int[numBlobs];

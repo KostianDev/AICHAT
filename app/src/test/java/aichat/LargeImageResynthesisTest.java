@@ -5,17 +5,30 @@ import aichat.core.ImageHarmonyEngine.ColorModel;
 import aichat.model.ColorPalette;
 import aichat.native_.NativeAccelerator;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.condition.DisabledIf;
 
 import java.awt.image.BufferedImage;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Performance tests for large image resynthesis.
+ * These tests verify that native acceleration meets performance targets.
+ * 
+ * Disabled in Java-only mode (force.java=true) because Java fallback
+ * is intentionally slower and would fail performance thresholds.
+ */
 @DisplayName("Large Image Resynthesis Performance Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@DisabledIf("isForceJavaMode")
 class LargeImageResynthesisTest {
     
     private static ImageHarmonyEngine engine;
+    
+    static boolean isForceJavaMode() {
+        return Boolean.getBoolean("force.java");
+    }
     
     @BeforeAll
     static void setup() {

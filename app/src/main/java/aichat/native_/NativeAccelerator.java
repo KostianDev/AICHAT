@@ -9,16 +9,30 @@ import java.util.List;
 
 public final class NativeAccelerator {
     
-    private static final NativeAccelerator INSTANCE = new NativeAccelerator();
+    private static volatile NativeAccelerator INSTANCE;
+    
+    /**
+     * System property to force Java-only mode (disable native acceleration).
+     * Set -Dforce.java=true to enable.
+     */
+    private static boolean isForceJavaMode() {
+        return Boolean.getBoolean("force.java");
+    }
     
     private final NativeLibrary nativeLib;
     private final boolean available;
+    private final boolean forceJavaActive;
     
     private NativeAccelerator() {
+        this.forceJavaActive = isForceJavaMode();
         this.nativeLib = NativeLibrary.getInstance();
-        this.available = NativeLibrary.isAvailable();
         
-        if (available) {
+        // Check if native is available AND not forced to Java mode
+        this.available = !forceJavaActive && NativeLibrary.isAvailable();
+        
+        if (forceJavaActive) {
+            System.out.println("Native acceleration DISABLED (force.java=true), using Java fallback");
+        } else if (available) {
             System.out.println("Native acceleration enabled: " + nativeLib.getVersion() 
                 + " (SIMD: " + nativeLib.hasSIMD() + ")");
         } else {
@@ -27,11 +41,29 @@ public final class NativeAccelerator {
     }
     
     public static NativeAccelerator getInstance() {
+        if (INSTANCE == null) {
+            synchronized (NativeAccelerator.class) {
+                if (INSTANCE == null) {
+                    INSTANCE = new NativeAccelerator();
+                }
+            }
+        }
         return INSTANCE;
     }
     
+    /**
+     * Returns true if native acceleration is available AND enabled.
+     * Can be disabled via -Dforce.java=true system property.
+     */
     public boolean isAvailable() {
         return available;
+    }
+    
+    /**
+     * Returns true if force.java mode is enabled.
+     */
+    public static boolean isForceJava() {
+        return getInstance().forceJavaActive;
     }
     
     public String getVersion() {

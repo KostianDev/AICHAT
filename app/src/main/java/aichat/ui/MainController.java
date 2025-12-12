@@ -624,11 +624,6 @@ public class MainController {
         }
     }
     
-    private void displayImage(ImageView imageView, BufferedImage image) {
-        Image fxImage = SwingFXUtils.toFXImage(image, null);
-        imageView.setImage(fxImage);
-    }
-    
     private void displayPalette(FlowPane pane, ColorPalette palette) {
         pane.getChildren().clear();
         if (palette == null) return;

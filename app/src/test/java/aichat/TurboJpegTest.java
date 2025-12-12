@@ -3,6 +3,7 @@ package aichat;
 import aichat.native_.NativeAccelerator;
 import aichat.native_.NativeLibrary;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.condition.DisabledIf;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -16,6 +17,10 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("TurboJPEG Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TurboJpegTest {
+    
+    static boolean isForceJavaMode() {
+        return Boolean.getBoolean("force.java");
+    }
     
     private static Path tempDir;
     private static File testJpegFile;
@@ -62,6 +67,7 @@ class TurboJpegTest {
     @Test
     @Order(2)
     @DisplayName("TurboJPEG should be available")
+    @DisabledIf("isForceJavaMode")
     void turboJpegAvailable() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         assertTrue(accel.hasTurboJpeg(), "TurboJPEG should be available");
@@ -70,6 +76,7 @@ class TurboJpegTest {
     @Test
     @Order(3)
     @DisplayName("Should decode JPEG file correctly")
+    @DisabledIf("isForceJavaMode")
     void decodeJpegFile() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -84,6 +91,7 @@ class TurboJpegTest {
     @Test
     @Order(4)
     @DisplayName("Decoded pixels should have valid ARGB format")
+    @DisabledIf("isForceJavaMode")
     void decodedPixelsFormat() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -101,6 +109,7 @@ class TurboJpegTest {
     @Test
     @Order(5)
     @DisplayName("TurboJPEG should be faster than ImageIO")
+    @DisabledIf("isForceJavaMode")
     void performanceComparison() throws IOException {
         // Warm up
         for (int i = 0; i < 3; i++) {
@@ -137,6 +146,7 @@ class TurboJpegTest {
     @Test
     @Order(6)
     @DisplayName("Should return null for non-existent file")
+    @DisabledIf("isForceJavaMode")
     void nonExistentFile() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -148,6 +158,7 @@ class TurboJpegTest {
     @Test
     @Order(7)
     @DisplayName("Should return null for invalid JPEG data")
+    @DisabledIf("isForceJavaMode")
     void invalidJpegData() throws IOException {
         // Create a file with invalid JPEG data
         File invalidFile = tempDir.resolve("invalid.jpg").toFile();
@@ -164,6 +175,7 @@ class TurboJpegTest {
     @Test
     @Order(8)
     @DisplayName("Decoded image should be usable with BufferedImage")
+    @DisabledIf("isForceJavaMode")
     void createBufferedImage() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         

@@ -9,7 +9,6 @@ import aichat.native_.NativeAccelerator;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -351,16 +350,6 @@ public class ImageHarmonyEngine {
         }
 
         return reservoir;
-    }
-    
-    private List<ColorPoint> samplePixels(List<ColorPoint> pixels, int maxSize) {
-        if (pixels.size() <= maxSize) {
-            return pixels;
-        }
-        
-        List<ColorPoint> sampled = new ArrayList<>(pixels);
-        Collections.shuffle(sampled, new Random(seed));
-        return sampled.subList(0, maxSize);
     }
     
     private List<ColorPoint> convertColorSpace(List<ColorPoint> points, boolean toLab) {

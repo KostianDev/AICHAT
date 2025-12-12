@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("Large Image Quality Tests")
 class LargeImageQualityTest {
 
-    private static final Path OUTPUT_DIR = Path.of("build/test-output/large-image");
+    private static final Path OUTPUT_DIR = Path.of("test-results/large-image");
     
     @BeforeAll
     static void setup() throws IOException {

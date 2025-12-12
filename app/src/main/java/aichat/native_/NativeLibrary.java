@@ -19,11 +19,11 @@ public final class NativeLibrary {
     
     private final MethodHandle kmeans_cluster;
     private final MethodHandle assign_points_batch;
+    private final MethodHandle distance_squared;
     private final MethodHandle rgb_to_lab_batch;
     private final MethodHandle lab_to_rgb_batch;
     private final MethodHandle resynthesize_image;
     private final MethodHandle posterize_image;
-    private final MethodHandle extract_pixels;
     private final MethodHandle sample_pixels;
     private final MethodHandle aichat_native_version;
     private final MethodHandle aichat_has_simd;
@@ -92,6 +92,13 @@ public final class NativeLibrary {
                     ValueLayout.ADDRESS
                 ));
             
+            this.distance_squared = lookupFunction("distance_squared",
+                FunctionDescriptor.of(
+                    ValueLayout.JAVA_FLOAT,
+                    ValueLayout.ADDRESS,
+                    ValueLayout.ADDRESS
+                ));
+            
             this.rgb_to_lab_batch = lookupFunction("rgb_to_lab_batch",
                 FunctionDescriptor.ofVoid(
                     ValueLayout.ADDRESS,
@@ -123,13 +130,6 @@ public final class NativeLibrary {
                     ValueLayout.JAVA_INT,
                     ValueLayout.JAVA_INT,
                     ValueLayout.ADDRESS,
-                    ValueLayout.ADDRESS,
-                    ValueLayout.JAVA_INT,
-                    ValueLayout.ADDRESS
-                ));
-            
-            this.extract_pixels = lookupFunction("extract_pixels",
-                FunctionDescriptor.ofVoid(
                     ValueLayout.ADDRESS,
                     ValueLayout.JAVA_INT,
                     ValueLayout.ADDRESS
@@ -258,11 +258,11 @@ public final class NativeLibrary {
         } else {
             this.kmeans_cluster = null;
             this.assign_points_batch = null;
+            this.distance_squared = null;
             this.rgb_to_lab_batch = null;
             this.lab_to_rgb_batch = null;
             this.resynthesize_image = null;
             this.posterize_image = null;
-            this.extract_pixels = null;
             this.sample_pixels = null;
             this.aichat_native_version = null;
             this.aichat_has_simd = null;
@@ -421,6 +421,44 @@ public final class NativeLibrary {
         }
     }
     
+    /**
+     * Calculates squared Euclidean distance between two color points.
+     * 
+     * @param arena memory arena for native allocation
+     * @param point1 first color point as [c1, c2, c3]
+     * @param point2 second color point as [c1, c2, c3]
+     * @return squared distance: (c1a-c1b)² + (c2a-c2b)² + (c3a-c3b)²
+     */
+    public float distanceSquared(Arena arena, float[] point1, float[] point2) {
+        if (distance_squared == null) {
+            throw new UnsupportedOperationException("Native library not loaded");
+        }
+        
+        MemorySegment p1 = arena.allocate(COLOR_POINT_LAYOUT);
+        MemorySegment p2 = arena.allocate(COLOR_POINT_LAYOUT);
+        
+        p1.set(ValueLayout.JAVA_FLOAT, 0, point1[0]);
+        p1.set(ValueLayout.JAVA_FLOAT, 4, point1[1]);
+        p1.set(ValueLayout.JAVA_FLOAT, 8, point1[2]);
+        
+        p2.set(ValueLayout.JAVA_FLOAT, 0, point2[0]);
+        p2.set(ValueLayout.JAVA_FLOAT, 4, point2[1]);
+        p2.set(ValueLayout.JAVA_FLOAT, 8, point2[2]);
+        
+        try {
+            return (float) distance_squared.invokeExact(p1, p2);
+        } catch (Throwable t) {
+            throw new RuntimeException("distance_squared native call failed", t);
+        }
+    }
+    
+    /**
+     * Checks if distance_squared function is available.
+     */
+    public boolean hasDistanceSquared() {
+        return distance_squared != null;
+    }
+    
     public float[] kmeansCluster(Arena arena, float[] points, int k, 
                                   int maxIterations, float threshold, long seed) {
         if (kmeans_cluster == null) {
@@ -436,6 +474,7 @@ public final class NativeLibrary {
         pointsNative.copyFrom(MemorySegment.ofArray(points));
         
         try {
+            @SuppressWarnings("unused")
             int iterations = (int) kmeans_cluster.invokeExact(
                 pointsNative, n, k, maxIterations, threshold,
                 centroidsNative, assignmentsNative, seed
@@ -638,6 +677,7 @@ public final class NativeLibrary {
         pointsNative.copyFrom(MemorySegment.ofArray(points));
         
         try {
+            @SuppressWarnings("unused")
             int iterations = (int) hybrid_cluster.invokeExact(
                 pointsNative, n, k, blockSize, dbscanEps, dbscanMinPts,
                 kmeansMaxIter, kmeansThreshold, centroidsNative, seed

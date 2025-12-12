@@ -64,17 +64,147 @@ tasks.named('run') {
     dependsOn 'buildNative'
 }
 
+def testResultsDir = file("${project.rootDir}/test-results")
+
 tasks.named('test') {
     useJUnitPlatform()
     include '**/*Test.class'
     include '**/*Tests.class'
     include '**/*Properties.class'
     jvmArgs '--enable-native-access=ALL-UNNAMED'
+    
+    systemProperty 'force.java', System.getProperty('force.java', 'false')
+    systemProperty 'native.variant', System.getProperty('native.variant', 'auto')
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/test")
+        junitXml.outputLocation = file("${testResultsDir}/junit/test")
+    }
+    
     testLogging {
         events "passed", "skipped", "failed"
         showStandardStreams = true
         exceptionFormat = 'full'
     }
+}
+
+tasks.register('testJava', Test) {
+    description = 'Run tests with Java-only implementation (no native acceleration)'
+    group = 'verification'
+    dependsOn 'compileTestJava', 'processTestResources'
+    
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    
+    useJUnitPlatform()
+    include '**/*Test.class'
+    include '**/*Tests.class'
+    include '**/*Properties.class'
+    
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'force.java', 'true'
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/testJava")
+        junitXml.outputLocation = file("${testResultsDir}/junit/testJava")
+    }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║                    TEST PROFILE: JAVA FALLBACK                       ║
+║  Running with -Dforce.java=true (native acceleration disabled)       ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+tasks.register('testNative', Test) {
+    description = 'Run tests with native acceleration (default behavior)'
+    group = 'verification'
+    dependsOn 'buildNative', 'compileTestJava', 'processTestResources'
+    
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    
+    useJUnitPlatform()
+    include '**/*Test.class'
+    include '**/*Tests.class'
+    include '**/*Properties.class'
+    
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'force.java', 'false'
+    
+    reports {
+        html.outputLocation = file("${testResultsDir}/reports/testNative")
+        junitXml.outputLocation = file("${testResultsDir}/junit/testNative")
+    }
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+    
+    doFirst {
+        def gpu = ['lspci', '-nn'].execute().text.toLowerCase()
+        if (gpu.contains('amd') || gpu.contains('radeon')) {
+            environment 'RUSTICL_ENABLE', 'radeonsi'
+            println "OpenCL: AMD GPU detected"
+        } else if (gpu.contains('intel')) {
+            environment 'RUSTICL_ENABLE', 'iris'
+            println "OpenCL: Intel GPU detected"
+        }
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║                    TEST PROFILE: NATIVE ACCELERATION                 ║
+║  Running with native library (SIMD/OpenMP/OpenCL if available)       ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+tasks.register('testAllProfiles') {
+    description = 'Run tests with both profiles: default (with native) and Java-only fallback'
+    group = 'verification'
+    
+    // Run in sequence: default first (uses native), then Java fallback
+    dependsOn 'test', 'testJava'
+    
+    doFirst {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║                    RUNNING ALL TEST PROFILES                         ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Phase 1: Default tests (uses native acceleration if available)      ║
+║  Phase 2: Java-only fallback tests (force.java=true)                 ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Note: testNative is separate - use it when developing native code   ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+    
+    doLast {
+        println """
+╔══════════════════════════════════════════════════════════════════════╗
+║                    ALL TEST PROFILES COMPLETED                       ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  ✓ Default tests completed (native acceleration)                     ║
+║  ✓ Java Fallback tests completed                                     ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+    }
+}
+
+// Ensure testJava runs after test
+tasks.named('testJava') {
+    mustRunAfter 'test'
 }
 
 pitest {
@@ -89,6 +219,7 @@ pitest {
     failWhenNoMutations = false
     jvmArgs = ['--enable-native-access=ALL-UNNAMED']
     excludedClasses = ['aichat.native_.*']
+    reportDir = file("${project.rootDir}/test-results/pitest")
 }
 
 jmh {
@@ -99,9 +230,8 @@ jmh {
     jvmArgs = ['--enable-native-access=ALL-UNNAMED']
     timeOnIteration = '1s'
     warmup = '1s'
+    resultsFile = file("${project.rootDir}/test-results/jmh/results.json")
 }
-
-// ==================== Distribution Tasks ====================
 
 def currentOs = org.gradle.internal.os.OperatingSystem.current()
 def platform = currentOs.isLinux() ? 'linux' : (currentOs.isMacOsX() ? 'macos' : 'windows')
@@ -404,7 +534,6 @@ tasks.register('fullDistTarGz', Tar) {
     }
 }
 
-// Build all distributions
 tasks.register('allDist') {
     description = 'Build all distribution archives'
     group = 'distribution'
@@ -415,10 +544,8 @@ tasks.register('allDist') {
     }
 }
 
-// ==================== Comprehensive Test Suite ====================
-
 tasks.register('allTests') {
-    description = 'Run all tests: unit tests, PBT, visual regression, JMH benchmarks, and Pitest mutation testing'
+    description = 'Run all tests: default + Java fallback, JMH benchmarks, and Pitest mutation testing'
     group = 'verification'
     
     doFirst {
@@ -426,73 +553,86 @@ tasks.register('allTests') {
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                    AICHAT Comprehensive Test Suite                   ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  Phase 1: Unit Tests + Property-Based Tests (JUnit 5 + jqwik)        ║
-║  Phase 2: JMH Benchmarks (performance validation)                    ║
-║  Phase 3: Pitest Mutation Testing (code quality)                     ║
+║  Phase 1: Default Tests (with native acceleration)                   ║
+║  Phase 2: Java-only Fallback Tests (verify pure Java works)          ║
+║  Phase 3: JMH Benchmarks (performance validation)                    ║
+║  Phase 4: Pitest Mutation Testing (code quality)                     ║
 ╚══════════════════════════════════════════════════════════════════════╝
 '''
     }
 }
 
-// Phase 1: All unit and property-based tests
 tasks.register('testPhase1') {
-    description = 'Phase 1: Run all unit tests and property-based tests'
+    description = 'Phase 1: Run all unit tests and property-based tests (default profile)'
     group = 'verification'
     dependsOn 'test'
     
     doFirst {
-        println "\n═══ Phase 1: Unit Tests + PBT ═══"
+        println "\n═══ Phase 1: Default Tests (auto-detect native) ═══"
     }
     doLast {
-        println "✓ Phase 1 completed: Unit tests and PBT passed"
+        println "✓ Phase 1 completed: Default tests passed"
     }
 }
 
-// Phase 2: JMH benchmarks (quick mode for CI)
-tasks.register('testPhase2') {
-    description = 'Phase 2: Run JMH benchmarks (quick mode)'
+tasks.register('testPhase2Java') {
+    description = 'Phase 2: Run tests with Java-only fallback'
     group = 'verification'
     dependsOn 'testPhase1'
+    mustRunAfter 'testPhase1'
     
     doFirst {
-        println "\n═══ Phase 2: JMH Benchmarks ═══"
+        println "\n═══ Phase 2: Java-only Fallback Tests ═══"
+    }
+    
+    finalizedBy 'testJava'
+}
+
+tasks.register('testPhase3Benchmark') {
+    description = 'Phase 3: Run JMH benchmarks (quick mode)'
+    group = 'verification'
+    dependsOn 'testPhase2Java'
+    mustRunAfter 'testPhase2Java'
+    
+    doFirst {
+        println "\n═══ Phase 3: JMH Benchmarks ═══"
     }
     
     finalizedBy 'jmh'
 }
 
-// Phase 3: Pitest mutation testing
-tasks.register('testPhase3') {
-    description = 'Phase 3: Run Pitest mutation testing'
+tasks.register('testPhase4Mutation') {
+    description = 'Phase 4: Run Pitest mutation testing'
     group = 'verification'
     dependsOn 'testPhase1'
+    mustRunAfter 'testPhase3Benchmark'
     
     doFirst {
-        println "\n═══ Phase 3: Pitest Mutation Testing ═══"
+        println "\n═══ Phase 4: Pitest Mutation Testing ═══"
     }
     
     finalizedBy 'pitest'
 }
 
-// Configure allTests to run all phases
 allTests {
-    dependsOn 'testPhase1', 'testPhase2', 'testPhase3'
+    dependsOn 'testPhase1', 'testPhase2Java', 'testPhase3Benchmark', 'testPhase4Mutation'
     
     doLast {
         println '''
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                         Test Suite Complete                          ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║  Reports:                                                            ║
-║    • Unit Tests:  build/reports/tests/test/index.html                ║
-║    • JMH:         build/results/jmh/results.json                     ║
-║    • Pitest:      build/reports/pitest/index.html                    ║
+║  Reports (all in test-results/):                                     ║
+║    • Default Tests:   test-results/reports/test/index.html           ║
+║    • Java Tests:      test-results/reports/testJava/index.html       ║
+║    • Performance:     test-results/performance/                      ║
+║    • JMH:             test-results/jmh/results.json                  ║
+║    • Pitest:          test-results/pitest/index.html                 ║
 ╚══════════════════════════════════════════════════════════════════════╝
 '''
     }
 }
 
-// Quick test (unit tests only, no benchmarks or mutation)
 tasks.register('quickTest') {
     description = 'Quick test: only unit tests and PBT (skip JMH and Pitest)'
     group = 'verification'

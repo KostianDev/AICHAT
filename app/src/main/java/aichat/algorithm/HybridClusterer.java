@@ -92,8 +92,6 @@ public class HybridClusterer implements ClusteringStrategy {
         int n = points.size();
         int numBlocks = (n + blockSize - 1) / blockSize;
         
-        List<ColorPoint> allRepresentatives = Collections.synchronizedList(new ArrayList<>());
-        
         // Convert to array for efficient access
         double[][] pointArray = new double[n][3];
         for (int i = 0; i < n; i++) {
@@ -104,15 +102,25 @@ public class HybridClusterer implements ClusteringStrategy {
         }
         
         // Process blocks (parallel for large datasets)
+        // Use an array of lists to preserve deterministic ordering
+        @SuppressWarnings("unchecked")
+        List<ColorPoint>[] blockResults = new List[numBlocks];
+        
         if (n > PARALLEL_THRESHOLD && numBlocks > 4) {
             IntStream.range(0, numBlocks).parallel().forEach(b -> {
-                List<ColorPoint> blockReps = processBlock(pointArray, b, n, eps);
-                allRepresentatives.addAll(blockReps);
+                blockResults[b] = processBlock(pointArray, b, n, eps);
             });
         } else {
             for (int b = 0; b < numBlocks; b++) {
-                List<ColorPoint> blockReps = processBlock(pointArray, b, n, eps);
-                allRepresentatives.addAll(blockReps);
+                blockResults[b] = processBlock(pointArray, b, n, eps);
+            }
+        }
+        
+        // Collect results in deterministic order
+        List<ColorPoint> allRepresentatives = new ArrayList<>();
+        for (int b = 0; b < numBlocks; b++) {
+            if (blockResults[b] != null) {
+                allRepresentatives.addAll(blockResults[b]);
             }
         }
         

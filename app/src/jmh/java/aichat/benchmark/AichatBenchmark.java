@@ -16,17 +16,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-/**
- * JMH Benchmarks for AICHAT components.
- * 
- * Run with: ./gradlew jmh
- * 
- * Measures:
- * 1. RGB vs CIELAB color model overhead
- * 2. Clustering algorithm performance at different scales
- * 3. Color space conversion throughput
- * 4. Full pipeline analysis performance
- */
+/** JMH Benchmark: AICHAT core components performance. */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
@@ -35,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 3, time = 1)
 public class AichatBenchmark {
 
-    // Test data sizes
     @Param({"5000", "10000"})
     private int dataSize;
 
@@ -50,15 +39,12 @@ public class AichatBenchmark {
 
     @Setup(Level.Trial)
     public void setup() {
-        // Generate test data
         testPoints = generateRandomPoints(dataSize, 42L);
         testImage = generateTestImage(100, 100, 42L);
         clusterer = new HybridClusterer(42L);
         rgbEngine = new ImageHarmonyEngine(ColorModel.RGB, 42L);
         labEngine = new ImageHarmonyEngine(ColorModel.CIELAB, 42L);
     }
-
-    // ==================== Color Space Conversion Benchmarks ====================
 
     @Benchmark
     public void rgbToLabSingle(Blackhole bh) {
@@ -87,14 +73,10 @@ public class AichatBenchmark {
         bh.consume(ColorSpaceConverter.labToRgbBatch(labPoints));
     }
 
-    // ==================== Clustering Benchmarks ====================
-
     @Benchmark
     public void hybridClustering(Blackhole bh) {
         bh.consume(clusterer.cluster(testPoints, clusterCount));
     }
-
-    // ==================== Color Model Comparison ====================
 
     @Benchmark
     public void analyzeRgb(Blackhole bh) {
@@ -105,8 +87,6 @@ public class AichatBenchmark {
     public void analyzeCielab(Blackhole bh) {
         bh.consume(labEngine.analyze(testImage, clusterCount));
     }
-
-    // ==================== Full Pipeline Benchmarks ====================
 
     @Benchmark
     public void fullPipelineRgb(Blackhole bh) {
@@ -130,8 +110,6 @@ public class AichatBenchmark {
         bh.consume(labEngine.resynthesize(target, srcPalette, tgtPalette));
     }
 
-    // ==================== DeltaE Calculation Benchmark ====================
-
     @Benchmark
     public void deltaE2000Calculation(Blackhole bh) {
         List<ColorPoint> labPoints = ColorSpaceConverter.rgbToLabBatch(testPoints);
@@ -141,8 +119,6 @@ public class AichatBenchmark {
             bh.consume(ColorSpaceConverter.deltaE2000(labPoints.get(i), labPoints.get(i + 1)));
         }
     }
-
-    // ==================== Helper Methods ====================
 
     private static List<ColorPoint> generateRandomPoints(int count, long seed) {
         List<ColorPoint> points = new ArrayList<>(count);
@@ -162,7 +138,6 @@ public class AichatBenchmark {
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Random random = new Random(seed);
         
-        // Create some color blobs for more realistic clustering
         int numBlobs = 5;
         Color[] blobColors = new Color[numBlobs];
         int[] blobX = new int[numBlobs];
@@ -176,7 +151,6 @@ public class AichatBenchmark {
         
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                // Find nearest blob
                 int nearest = 0;
                 double minDist = Double.MAX_VALUE;
                 for (int i = 0; i < numBlobs; i++) {
