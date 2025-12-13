@@ -16,7 +16,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests for TurboJPEG integration.
- * All tests are disabled when native library is unavailable.
+ * Tests are disabled when native library is unavailable.
+ * Tests requiring TurboJPEG are additionally disabled when TurboJPEG is not compiled in.
  */
 @DisplayName("TurboJPEG Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -28,6 +29,13 @@ class TurboJpegTest {
      */
     static boolean isNativeUnavailable() {
         return !NativeAccelerator.getInstance().isAvailable();
+    }
+    
+    /**
+     * Returns true if TurboJPEG is not available (TurboJPEG-specific tests should be skipped).
+     */
+    static boolean isTurboJpegUnavailable() {
+        return !NativeAccelerator.getInstance().hasTurboJpeg();
     }
     
     private static Path tempDir;
@@ -75,6 +83,7 @@ class TurboJpegTest {
     @Test
     @Order(2)
     @DisplayName("TurboJPEG should be available")
+    @DisabledIf("isTurboJpegUnavailable")
     void turboJpegAvailable() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         assertTrue(accel.hasTurboJpeg(), "TurboJPEG should be available");
@@ -83,6 +92,7 @@ class TurboJpegTest {
     @Test
     @Order(3)
     @DisplayName("Should decode JPEG file correctly")
+    @DisabledIf("isTurboJpegUnavailable")
     void decodeJpegFile() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -97,6 +107,7 @@ class TurboJpegTest {
     @Test
     @Order(4)
     @DisplayName("Decoded pixels should have valid ARGB format")
+    @DisabledIf("isTurboJpegUnavailable")
     void decodedPixelsFormat() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -114,6 +125,7 @@ class TurboJpegTest {
     @Test
     @Order(5)
     @DisplayName("TurboJPEG should be faster than ImageIO")
+    @DisabledIf("isTurboJpegUnavailable")
     void performanceComparison() throws IOException {
         // Warm up
         for (int i = 0; i < 3; i++) {
@@ -150,6 +162,7 @@ class TurboJpegTest {
     @Test
     @Order(6)
     @DisplayName("Should return null for non-existent file")
+    @DisabledIf("isTurboJpegUnavailable")
     void nonExistentFile() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
@@ -161,6 +174,7 @@ class TurboJpegTest {
     @Test
     @Order(7)
     @DisplayName("Should return null for invalid JPEG data")
+    @DisabledIf("isTurboJpegUnavailable")
     void invalidJpegData() throws IOException {
         // Create a file with invalid JPEG data
         File invalidFile = tempDir.resolve("invalid.jpg").toFile();
@@ -177,6 +191,7 @@ class TurboJpegTest {
     @Test
     @Order(8)
     @DisplayName("Decoded image should be usable with BufferedImage")
+    @DisabledIf("isTurboJpegUnavailable")
     void createBufferedImage() {
         NativeAccelerator accel = NativeAccelerator.getInstance();
         
