@@ -16,18 +16,22 @@ import static org.junit.jupiter.api.Assertions.*;
  * Performance tests for large image resynthesis.
  * These tests verify that native acceleration meets performance targets.
  * 
- * Disabled in Java-only mode (force.java=true) because Java fallback
- * is intentionally slower and would fail performance thresholds.
+ * Disabled when native library is unavailable (no compiled library or force.java=true)
+ * because Java fallback is intentionally slower and would fail performance thresholds.
  */
 @DisplayName("Large Image Resynthesis Performance Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@DisabledIf("isForceJavaMode")
+@DisabledIf("isNativeUnavailable")
 class LargeImageResynthesisTest {
     
     private static ImageHarmonyEngine engine;
     
-    static boolean isForceJavaMode() {
-        return Boolean.getBoolean("force.java");
+    /**
+     * Returns true if native acceleration is unavailable (tests should be skipped).
+     * This covers both force.java=true AND when native library is not compiled/loaded.
+     */
+    static boolean isNativeUnavailable() {
+        return !NativeAccelerator.getInstance().isAvailable();
     }
     
     @BeforeAll

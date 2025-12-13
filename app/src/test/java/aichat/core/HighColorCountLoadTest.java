@@ -36,8 +36,11 @@ class HighColorCountLoadTest {
     
     private static final List<PerformanceResult> results = new ArrayList<>();
     
-    static boolean isForceJavaMode() {
-        return Boolean.getBoolean("force.java");
+    /**
+     * Returns true if native acceleration is unavailable (performance tests should be skipped).
+     */
+    static boolean isNativeUnavailable() {
+        return !NativeAccelerator.getInstance().isAvailable();
     }
     
     record PerformanceResult(
@@ -147,7 +150,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(1)
     @DisplayName("2MP RGB k=256")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test2MP_256colors_RGB() {
         // Note: First test may be slower due to JIT warmup and OpenCL initialization
         runLoadTest(1920, 1080, 256, ColorModel.RGB, 
@@ -158,7 +161,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(2)
     @DisplayName("2MP CIELAB k=256 - Analysis and Resynthesis")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test2MP_256colors_CIELAB() {
         runLoadTest(1920, 1080, 256, ColorModel.CIELAB, 
             /* maxAnalyzeMs */ 15000, 
@@ -168,7 +171,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(3)
     @DisplayName("2MP RGB k=512 - Analysis and Resynthesis")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test2MP_512colors_RGB() {
         runLoadTest(1920, 1080, 512, ColorModel.RGB, 20000, 10000);
     }
@@ -176,7 +179,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(4)
     @DisplayName("8MP RGB k=256")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test8MP_256colors_RGB() {
         runLoadTest(3840, 2160, 256, ColorModel.RGB, 30000, 5000);
     }
@@ -184,7 +187,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(5)
     @DisplayName("8MP CIELAB k=256")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test8MP_256colors_CIELAB() {
         runLoadTest(3840, 2160, 256, ColorModel.CIELAB, 45000, 8000);
     }
@@ -192,7 +195,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(6)
     @DisplayName("8MP RGB k=512")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test8MP_512colors_RGB() {
         runLoadTest(3840, 2160, 512, ColorModel.RGB, 60000, 60000);
     }
@@ -200,7 +203,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(7)
     @DisplayName("16MP RGB k=256")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test16MP_256colors_RGB() {
         runLoadTest(4000, 4000, 256, ColorModel.RGB, 60000, 10000);
     }
@@ -208,7 +211,7 @@ class HighColorCountLoadTest {
     @Test
     @Order(8)
     @DisplayName("16MP RGB k=512")
-    @DisabledIf("isForceJavaMode")
+    @DisabledIf("isNativeUnavailable")
     void test16MP_512colors_RGB() {
         runLoadTest(4000, 4000, 512, ColorModel.RGB, 120000, 120000);
     }

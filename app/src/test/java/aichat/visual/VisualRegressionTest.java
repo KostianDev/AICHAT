@@ -3,6 +3,7 @@ package aichat.visual;
 import aichat.core.ImageHarmonyEngine;
 import aichat.core.ImageHarmonyEngine.ColorModel;
 import aichat.model.ColorPalette;
+import aichat.native_.NativeAccelerator;
 import com.github.romankh3.image.comparison.ImageComparison;
 import com.github.romankh3.image.comparison.ImageComparisonUtil;
 import com.github.romankh3.image.comparison.model.ImageComparisonResult;
@@ -25,14 +26,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * Visual regression tests for image resynthesis.
  * These tests compare output images against golden references.
  * 
- * Note: These tests are disabled in Java-only mode (force.java=true) because
- * Java and Native implementations may produce slightly different results due to
+ * Note: These tests are disabled when native library is unavailable because
+ * Java and Native implementations may produce different results due to
  * floating-point precision differences. Use DifferentialClusteringTest for
  * cross-implementation validation.
  */
 @DisplayName("Visual Regression Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-@DisabledIf("isForceJavaMode")
+@DisabledIf("isNativeUnavailable")
 class VisualRegressionTest {
 
     private static final String PROJECT_ROOT = System.getProperty("user.dir").replace("/app", "");
@@ -40,8 +41,11 @@ class VisualRegressionTest {
     private static final String ACTUAL_DIR = PROJECT_ROOT + "/test-results/visual";
     private static final double THRESHOLD_PERCENT = 0.5;
 
-    static boolean isForceJavaMode() {
-        return Boolean.getBoolean("force.java");
+    /**
+     * Returns true if native acceleration is unavailable (tests should be skipped).
+     */
+    static boolean isNativeUnavailable() {
+        return !NativeAccelerator.getInstance().isAvailable();
     }
 
     private ImageHarmonyEngine rgbEngine;

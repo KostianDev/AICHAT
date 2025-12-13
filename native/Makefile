@@ -37,9 +37,22 @@ else ifeq ($(UNAME_S),Linux)
     CC = gcc
     LDFLAGS = -shared -fPIC -fopenmp
     PLATFORM = linux
-    CFLAGS_PLATFORM = -O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -fopenmp -DHAVE_TURBOJPEG
-    LIBS = -lm -lturbojpeg
-    HAS_TURBOJPEG = 1
+    CFLAGS_PLATFORM = -O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -fopenmp
+    LIBS = -lm
+    
+    TURBOJPEG_CHECK := $(shell pkg-config --exists libturbojpeg 2>/dev/null && echo yes)
+    ifeq ($(TURBOJPEG_CHECK),yes)
+        CFLAGS_PLATFORM += -DHAVE_TURBOJPEG
+        LIBS += $(shell pkg-config --libs libturbojpeg)
+        HAS_TURBOJPEG = 1
+    else
+        TURBOJPEG_TEST := $(shell echo 'int main(){}' | gcc -x c - -lturbojpeg -o /dev/null 2>/dev/null && echo yes)
+        ifeq ($(TURBOJPEG_TEST),yes)
+            CFLAGS_PLATFORM += -DHAVE_TURBOJPEG
+            LIBS += -lturbojpeg
+            HAS_TURBOJPEG = 1
+        endif
+    endif
     
     OPENCL_CHECK := $(shell pkg-config --exists OpenCL 2>/dev/null && echo yes)
     ifeq ($(OPENCL_CHECK),yes)
@@ -60,11 +73,19 @@ else ifeq ($(UNAME_S),Darwin)
     CC = gcc
     LDFLAGS = -dynamiclib -fopenmp
     PLATFORM = macos
-    CFLAGS_PLATFORM = -O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -fopenmp -DHAVE_TURBOJPEG
+    CFLAGS_PLATFORM = -O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -fopenmp
+    LIBS = -lm
+    
+    TURBOJPEG_TEST := $(shell echo 'int main(){}' | gcc -x c - -lturbojpeg -o /dev/null 2>/dev/null && echo yes)
+    ifeq ($(TURBOJPEG_TEST),yes)
+        CFLAGS_PLATFORM += -DHAVE_TURBOJPEG
+        LIBS += -lturbojpeg
+        HAS_TURBOJPEG = 1
+    endif
+    
     OPENCL_LIBS = -framework OpenCL
     HAS_OPENCL = 1
-    HAS_TURBOJPEG = 1
-    LIBS = -lm -lturbojpeg $(OPENCL_LIBS)
+    LIBS += $(OPENCL_LIBS)
 endif
 
 CFLAGS = $(CFLAGS_PLATFORM) $(OPENCL_CFLAGS)
@@ -122,7 +143,7 @@ scalar:
 	@echo "=== Building SCALAR variant (no AVX2, no OpenMP) ==="
 	$(MAKE) clean
 	$(MAKE) VARIANT=scalar \
-		CFLAGS_PLATFORM="-O3 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_SCALAR" \
+		CFLAGS_PLATFORM="-O3 -ffast-math -fPIC -Wall -Wextra -DNDEBUG $(if $(HAS_TURBOJPEG),-DHAVE_TURBOJPEG,) -DVARIANT_SCALAR" \
 		LDFLAGS="-shared -fPIC" \
 		LIB_TARGET="libaichat_native_scalar.so"
 	@mv $(TARGET_DIR)/libaichat_native_scalar.so $(TARGET_DIR)/ 2>/dev/null || true
@@ -131,7 +152,7 @@ simd:
 	@echo "=== Building SIMD variant (AVX2, no OpenMP) ==="
 	$(MAKE) clean
 	$(MAKE) VARIANT=simd \
-		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_SIMD" \
+		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -Wall -Wextra -DNDEBUG $(if $(HAS_TURBOJPEG),-DHAVE_TURBOJPEG,) -DVARIANT_SIMD" \
 		LDFLAGS="-shared -fPIC" \
 		LIB_TARGET="libaichat_native_simd.so"
 	@mv $(TARGET_DIR)/libaichat_native_simd.so $(TARGET_DIR)/ 2>/dev/null || true
@@ -140,7 +161,7 @@ openmp:
 	@echo "=== Building OPENMP variant (AVX2 + OpenMP) ==="
 	$(MAKE) clean
 	$(MAKE) VARIANT=openmp \
-		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -fopenmp -Wall -Wextra -DNDEBUG -DHAVE_TURBOJPEG -DVARIANT_OPENMP" \
+		CFLAGS_PLATFORM="-O3 -march=native -mavx2 -ffast-math -fPIC -fopenmp -Wall -Wextra -DNDEBUG $(if $(HAS_TURBOJPEG),-DHAVE_TURBOJPEG,) -DVARIANT_OPENMP" \
 		LDFLAGS="-shared -fPIC -fopenmp" \
 		LIB_TARGET="libaichat_native_openmp.so"
 	@mv $(TARGET_DIR)/libaichat_native_openmp.so $(TARGET_DIR)/ 2>/dev/null || true
