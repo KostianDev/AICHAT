@@ -34,6 +34,7 @@ public final class NativeLibrary {
     private final MethodHandle turbojpeg_decode_buffer;
     private final MethodHandle turbojpeg_free;
     private final MethodHandle turbojpeg_encode_to_file;
+    private final MethodHandle aichat_has_turbojpeg;
     
     // OpenCL GPU acceleration
     private final MethodHandle aichat_has_opencl;
@@ -218,6 +219,9 @@ public final class NativeLibrary {
                     ValueLayout.ADDRESS
                 ));
             
+            this.aichat_has_turbojpeg = lookupFunction("aichat_has_turbojpeg",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT));
+            
             // OpenCL GPU acceleration functions
             this.aichat_has_opencl = lookupFunction("aichat_has_opencl",
                 FunctionDescriptor.of(ValueLayout.JAVA_INT));
@@ -273,6 +277,7 @@ public final class NativeLibrary {
             this.turbojpeg_decode_buffer = null;
             this.turbojpeg_free = null;
             this.turbojpeg_encode_to_file = null;
+            this.aichat_has_turbojpeg = null;
             this.aichat_has_opencl = null;
             this.opencl_init = null;
             this.opencl_cleanup = null;
@@ -885,7 +890,15 @@ public final class NativeLibrary {
     }
     
     public boolean hasTurboJpeg() {
-        return turbojpeg_decode_buffer != null || decode_jpeg_file_turbojpeg != null;
+        if (aichat_has_turbojpeg == null) {
+            return false;
+        }
+        try {
+            int result = (int) aichat_has_turbojpeg.invokeExact();
+            return result != 0;
+        } catch (Throwable t) {
+            return false;
+        }
     }
     
     /**
