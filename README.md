@@ -147,12 +147,12 @@ The native library (`libaichat_native.so` / `aichat_native.dll`) uses **all avai
 
 | Optimization | Description | Status |
 |--------------|-------------|--------|
-| **SIMD (AVX2)** | Vectorized operations via compiler auto-vectorization | Always enabled (`-mavx2 -O3`) |
+| **SIMD (AVX2)** | Hand-written AVX2 intrinsics for hot paths (e.g., `find_nearest_perceptual_avx2`) | Always enabled (`-mavx2 -O3`) |
 | **OpenMP** | Multi-threaded parallel loops for batch operations | Always enabled (`-fopenmp`) |
 | **OpenCL** | GPU acceleration for resynthesis | Auto-detected at build time |
 | **TurboJPEG** | Fast JPEG decoding | Auto-detected at build time |
 
-**Note:** This native code uses all optimizations together. The compiler automatically vectorizes loops with AVX2, and OpenMP parallelizes batch operations.
+**Note:** Critical functions use explicit AVX2 intrinsics for maximum performance, while OpenMP parallelizes batch operations across threads.
 
 ### Testing Native Optimization Variants
 
