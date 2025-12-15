@@ -9,15 +9,7 @@ import java.lang.foreign.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-/**
- * Minimal unit tests for distance_squared function.
- * Tests the Euclidean distance formula: d² = (x₁-x₀)² + (y₁-y₀)² + (z₁-z₀)²
- * 
- * Focuses on minimal coverage with maximum value:
- * - Exact values for key test cases
- * - Euclidean scaling property d(k*x) = k²*d(x) (catches all channel squaring bugs)
- * - Symmetry property d(a,b) = d(b,a)
- */
+//Minimal unit tests for distance_squared function.
 @DisplayName("Native distance_squared Tests")
 class NativeDistanceTest {
     

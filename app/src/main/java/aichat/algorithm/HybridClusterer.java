@@ -57,12 +57,12 @@ public class HybridClusterer implements ClusteringStrategy {
         // Java fallback
         return clusterJava(points, k);
     }
-    
-    private List<ColorPoint> clusterNative(List<ColorPoint> points, int k) {
+
+    List<ColorPoint> clusterNative(List<ColorPoint> points, int k) {
         return nativeAccelerator.hybridCluster(points, k, blockSize, minPts, seed);
     }
-    
-    private List<ColorPoint> clusterJava(List<ColorPoint> points, int k) {
+
+    List<ColorPoint> clusterJava(List<ColorPoint> points, int k) {
         int n = points.size();
         
         // For very small datasets, use K-Means directly
@@ -510,6 +510,41 @@ public class HybridClusterer implements ClusteringStrategy {
         double d1 = a[1] - b[1];
         double d2 = a[2] - b[2];
         return d0*d0 + d1*d1 + d2*d2;
+    }
+    
+    /**
+     * Package-private for differential testing.
+     * Java implementation of point assignment to nearest centroid.
+     */
+    int[] assignPointsJava(List<ColorPoint> points, List<ColorPoint> centroids) {
+        int n = points.size();
+        int k = centroids.size();
+        int[] assignments = new int[n];
+        
+        for (int i = 0; i < n; i++) {
+            ColorPoint p = points.get(i);
+            int closest = 0;
+            double minDist = distanceSqColorPoint(p, centroids.get(0));
+            
+            for (int c = 1; c < k; c++) {
+                double d = distanceSqColorPoint(p, centroids.get(c));
+                if (d < minDist) {
+                    minDist = d;
+                    closest = c;
+                }
+            }
+            
+            assignments[i] = closest;
+        }
+        
+        return assignments;
+    }
+    
+    private static double distanceSqColorPoint(ColorPoint a, ColorPoint b) {
+        double d1 = a.c1() - b.c1();
+        double d2 = a.c2() - b.c2();
+        double d3 = a.c3() - b.c3();
+        return d1 * d1 + d2 * d2 + d3 * d3;
     }
     
     @Override

@@ -676,6 +676,7 @@ public final class NativeLibrary {
         }
         
         try {
+            @SuppressWarnings("unused")
             int changed = (int) assign_points_batch.invokeExact(pointsNative, n, centroidsNative, k, assignmentsNative);
             
             int[] result = new int[n];
