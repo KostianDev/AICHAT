@@ -676,7 +676,7 @@ public final class NativeLibrary {
         }
         
         try {
-            assign_points_batch.invokeExact(pointsNative, n, centroidsNative, k, assignmentsNative);
+            int changed = (int) assign_points_batch.invokeExact(pointsNative, n, centroidsNative, k, assignmentsNative);
             
             int[] result = new int[n];
             MemorySegment.ofArray(result).copyFrom(assignmentsNative);
