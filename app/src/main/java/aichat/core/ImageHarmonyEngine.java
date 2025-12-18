@@ -227,9 +227,10 @@ public class ImageHarmonyEngine {
         return output;
     }
     
-    private BufferedImage resynthesizeJava(BufferedImage targetImage,
-                                            ColorPalette mappedSource,
-                                            ColorPalette targetPalette) {
+    //Package-private for differential testing.
+    BufferedImage resynthesizeJava(BufferedImage targetImage,
+                                   ColorPalette mappedSource,
+                                   ColorPalette targetPalette) {
         List<ColorPoint> sourceColors = mappedSource.getColors();
         List<ColorPoint> targetColors = targetPalette.getColors();
         
@@ -266,10 +267,11 @@ public class ImageHarmonyEngine {
     /**
      * Posterization: replace each pixel with the exact palette color (no offset).
      * Result contains only K distinct colors.
+     * Package-private for differential testing.
      */
-    private BufferedImage posterizeJava(BufferedImage targetImage,
-                                         ColorPalette mappedSource,
-                                         ColorPalette targetPalette) {
+    BufferedImage posterizeJava(BufferedImage targetImage,
+                                ColorPalette mappedSource,
+                                ColorPalette targetPalette) {
         List<ColorPoint> sourceColors = mappedSource.getColors();
         List<ColorPoint> targetColors = targetPalette.getColors();
         

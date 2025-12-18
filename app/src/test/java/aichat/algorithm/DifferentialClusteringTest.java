@@ -188,7 +188,7 @@ class DifferentialClusteringTest {
     }
     
     @Nested
-    @DisplayName("Point Assignment: assignPointsJava() vs assignPointsBatch()")
+    @DisplayName("Point Assignment: assignPoints() vs assignPointsBatch()")
     class AssignPointsDifferential {
         
         @Test
@@ -199,7 +199,7 @@ class DifferentialClusteringTest {
             List<ColorPoint> points = generateRandomColors(500, SEED);
             List<ColorPoint> centroids = generateRandomColors(8, SEED + 1);
             
-            int[] javaAssignments = clusterer.assignPointsJava(points, centroids);
+            int[] javaAssignments = assignPointsJava(points, centroids);
             int[] nativeAssignments = nativeAccel.assignPointsBatch(points, centroids);
             
             assertNotNull(nativeAssignments, "Native assignPoints returned null");
@@ -218,7 +218,7 @@ class DifferentialClusteringTest {
                 new ColorPoint(100, 50, 50)  // dist = 50
             );
             
-            int[] javaAssignments = clusterer.assignPointsJava(points, centroids);
+            int[] javaAssignments = assignPointsJava(points, centroids);
             int[] nativeAssignments = nativeAccel.assignPointsBatch(points, centroids);
             
             assertNotNull(nativeAssignments);
@@ -234,17 +234,43 @@ class DifferentialClusteringTest {
             List<ColorPoint> points = generateRandomColors(10000, SEED);
             List<ColorPoint> centroids = generateRandomColors(16, SEED + 1);
             
-            int[] javaAssignments = clusterer.assignPointsJava(points, centroids);
+            int[] javaAssignments = assignPointsJava(points, centroids);
             int[] nativeAssignments = nativeAccel.assignPointsBatch(points, centroids);
             
             assertNotNull(nativeAssignments);
             assertArrayEquals(javaAssignments, nativeAssignments,
                 "All 10000 assignments should match between Java and Native");
         }
+        
+        //Helper to call HybridClusterer.assignPoints with List<ColorPoint> input.
+        private int[] assignPointsJava(List<ColorPoint> points, List<ColorPoint> centroids) {
+            int n = points.size();
+            int k = centroids.size();
+            
+            double[][] pointArray = new double[n][3];
+            for (int i = 0; i < n; i++) {
+                ColorPoint p = points.get(i);
+                pointArray[i][0] = p.c1();
+                pointArray[i][1] = p.c2();
+                pointArray[i][2] = p.c3();
+            }
+            
+            double[][] centroidArray = new double[k][3];
+            for (int i = 0; i < k; i++) {
+                ColorPoint c = centroids.get(i);
+                centroidArray[i][0] = c.c1();
+                centroidArray[i][1] = c.c2();
+                centroidArray[i][2] = c.c3();
+            }
+            
+            int[] assignments = new int[n];
+            clusterer.assignPoints(pointArray, centroidArray, assignments);
+            return assignments;
+        }
     }
     
     @Nested
-    @DisplayName("RGB ↔ LAB Conversion")
+    @DisplayName("RGB <-> LAB Conversion")
     class ColorConversionDifferential {
         
         @Test
@@ -254,7 +280,11 @@ class DifferentialClusteringTest {
             
             List<ColorPoint> testColors = generateRandomColors(100, SEED);
             
-            List<ColorPoint> javaResult = ColorSpaceConverter.rgbToLabBatch(testColors);
+            // Use single-point Java conversion (always Java, no native dispatch)
+            List<ColorPoint> javaResult = new ArrayList<>();
+            for (ColorPoint c : testColors) {
+                javaResult.add(ColorSpaceConverter.rgbToLab(c));
+            }
             List<ColorPoint> nativeResult = nativeAccel.rgbToLabBatch(testColors);
             
             assertNotNull(nativeResult, "Native rgbToLab returned null");
@@ -289,7 +319,10 @@ class DifferentialClusteringTest {
                 new ColorPoint(254, 254, 254)  // Near White
             );
             
-            List<ColorPoint> javaResult = ColorSpaceConverter.rgbToLabBatch(edgeCases);
+            List<ColorPoint> javaResult = new ArrayList<>();
+            for (ColorPoint c : edgeCases) {
+                javaResult.add(ColorSpaceConverter.rgbToLab(c));
+            }
             List<ColorPoint> nativeResult = nativeAccel.rgbToLabBatch(edgeCases);
             
             assertNotNull(nativeResult);
@@ -315,7 +348,10 @@ class DifferentialClusteringTest {
             
             List<ColorPoint> labColors = generateValidLabColors(100, SEED);
             
-            List<ColorPoint> javaResult = ColorSpaceConverter.labToRgbBatch(labColors);
+            List<ColorPoint> javaResult = new ArrayList<>();
+            for (ColorPoint c : labColors) {
+                javaResult.add(ColorSpaceConverter.labToRgb(c));
+            }
             List<ColorPoint> nativeResult = nativeAccel.labToRgbBatch(labColors);
             
             assertNotNull(nativeResult, "Native labToRgb returned null");
@@ -332,15 +368,18 @@ class DifferentialClusteringTest {
         }
         
         @Test
-        @DisplayName("Round-trip: RGB → LAB → RGB (both impls)")
+        @DisplayName("Round-trip: RGB -> LAB -> RGB (both impls)")
         void roundTripDifferential() {
             assumeTrue(nativeAvailable, "Native not available");
             
             List<ColorPoint> originalRgb = generateRandomColors(50, SEED);
             
             // Java round-trip
-            List<ColorPoint> javaLab = ColorSpaceConverter.rgbToLabBatch(originalRgb);
-            List<ColorPoint> javaRoundTrip = ColorSpaceConverter.labToRgbBatch(javaLab);
+            List<ColorPoint> javaRoundTrip = new ArrayList<>();
+            for (ColorPoint rgb : originalRgb) {
+                ColorPoint lab = ColorSpaceConverter.rgbToLab(rgb);
+                javaRoundTrip.add(ColorSpaceConverter.labToRgb(lab));
+            }
             
             // Native round-trip
             List<ColorPoint> nativeLab = nativeAccel.rgbToLabBatch(originalRgb);
